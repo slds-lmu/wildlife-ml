@@ -1,0 +1,45 @@
+name: Python package
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+
+    - name: Cache pip
+      uses: actions/cache@v2
+      id:   cache
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          ${{ runner.os }}-
+    - name: Install dependencies
+      run: |
+        pip install -U pip setuptools wheel
+	    pip install -r requirements.txt
+        pip install flake8 mypy pydocstyle
+    - name: Run Flake8
+      run: |
+        flake8 --max-line-length=88 --extend-ignore=E203 wildlifeml scripts
+    - name: Run MyPy
+      if: ${{ always() }}
+      run: |
+        mypy --ignore-missing-imports --scripts-are-modules --follow-imports skip wildlifeml scripts
+    - name: Run Pydocstyle
+      if: ${{ always() }}
+      run: |
+        pydocstyle --ignore-decorators=property wildlifeml scripts
