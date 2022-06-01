@@ -130,3 +130,9 @@ dmypy.json
 
 # Custom
 .idea
+models
+megadetector.pb
+data
+.data
+*.json
+dummy*
