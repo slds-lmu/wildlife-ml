@@ -1,3 +1,8 @@
 -e .
 
+click
+numpy
+pillow
 pre-commit
+tensorflow
+tqdm
