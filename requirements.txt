@@ -1,5 +1,6 @@
 -e .
 
+click
 numpy
 pillow
 pre-commit

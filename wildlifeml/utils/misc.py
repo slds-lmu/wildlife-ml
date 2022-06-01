@@ -24,7 +24,6 @@ def list_image_paths(
     """Traverse directory recursively and return absolute paths matching extension."""
     file_paths = []
     for filename in glob.iglob(directory + '/**/*', recursive=True):
-        print(filename)
         if filename.lower().endswith(extensions):
             file_paths.append(os.path.abspath(filename))
     return file_paths

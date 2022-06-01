@@ -74,7 +74,7 @@ class MegaDetector:
         print('Found {} image files in "{}"'.format(len(file_paths), directory))
 
         # Traverse through list according to batch size.
-        print('Converting directory ...')
+        print('Predicting bounding boxes ...')
         output_list = []
         for i in trange(0, len(file_paths), self.batch_size):
             batch_files = file_paths[i : i + self.batch_size]
@@ -88,11 +88,14 @@ class MegaDetector:
             # Add batch results to main output
             output_list.extend(batch_result)
 
+        print('Processing finished.')
+
         # Save output as JSON file
         if save_file:
             if output_file is None:
                 output_file = directory + '_megadetector.json'
             save_as_json(output_list, output_file)
+            print('Results were saved in "{}"'.format(output_file))
 
         return output_list
 
