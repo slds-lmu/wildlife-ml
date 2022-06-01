@@ -60,7 +60,9 @@ class MegaDetector:
         download_file(url, target_path)
         print('Downloading the model was successful.')
 
-    def predict_directory(self, directory: str) -> None:
+    def predict_directory(
+        self, directory: str, save_file: bool = True, output_file: Optional[str] = None
+    ) -> List[Dict]:
         """
         Predict bounding boxes for a directory.
 
@@ -87,8 +89,12 @@ class MegaDetector:
             output_list.extend(batch_result)
 
         # Save output as JSON file
-        result_file = directory + '_megadetector.json'
-        save_as_json(output_list, result_file)
+        if save_file:
+            if output_file is None:
+                output_file = directory + '_megadetector.json'
+            save_as_json(output_list, output_file)
+
+        return output_list
 
     def predict(self, imgs: np.ndarray) -> List[Dict]:
         """Predict bounding boxes for a numpy array."""
