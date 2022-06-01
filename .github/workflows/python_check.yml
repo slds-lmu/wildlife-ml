@@ -34,12 +34,12 @@ jobs:
         pip install flake8 mypy pydocstyle
     - name: Run Flake8
       run: |
-        flake8 --max-line-length=88 --extend-ignore=E203 wildlifeml scripts
+        flake8 --max-line-length=88 --extend-ignore=E203 wildlifeml
     - name: Run MyPy
       if: ${{ always() }}
       run: |
-        mypy --ignore-missing-imports --scripts-are-modules --follow-imports skip wildlifeml scripts
+        mypy --ignore-missing-imports --scripts-are-modules --follow-imports skip wildlifeml
     - name: Run Pydocstyle
       if: ${{ always() }}
       run: |
-        pydocstyle --ignore-decorators=property wildlifeml scripts
+        pydocstyle --ignore-decorators=property wildlifeml
