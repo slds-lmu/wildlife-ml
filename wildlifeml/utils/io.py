@@ -1,7 +1,11 @@
 """Classes and functions for I/O Operations."""
 import csv
 import json
-from typing import Any, List
+from typing import (
+    Any,
+    List,
+    Optional,
+)
 
 from PIL import Image
 
@@ -24,3 +28,14 @@ def save_as_json(dictionary: Any, target: str) -> None:
     """Save a python object as JSON file."""
     with open(target, 'w', encoding='utf-8') as f:
         json.dump(dictionary, f, ensure_ascii=False, indent=4)
+
+
+def save_as_csv(rows: List, target: str, header: Optional[List] = None) -> None:
+    """Save a list of rows to a csv file."""
+    with open(target, 'w', encoding='UTF8', newline='') as f:
+        writer = csv.writer(f)
+
+        if header is not None:
+            writer.writerow(header)
+
+        writer.writerows(rows)
