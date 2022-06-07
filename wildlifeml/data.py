@@ -1,13 +1,23 @@
 """Classes for accessing data."""
 import os
 import shutil
-from typing import Tuple
+from random import Random
+from typing import (
+    List,
+    Optional,
+    Tuple,
+)
 
 import numpy as np
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
-from wildlifeml.utils.io import save_as_csv, save_as_json
+from wildlifeml.utils.io import (
+    load_csv,
+    load_json,
+    save_as_csv,
+    save_as_json,
+)
 from wildlifeml.utils.misc import list_files
 
 
@@ -31,6 +41,54 @@ class WildlifeDataset(Sequence):
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
         """Return a batch with training data and labels."""
         pass
+
+
+# --------------------------------------------------------------------------------------
+
+
+def do_train_split(
+    label_file_path: str,
+    splits: Tuple[float, float],
+    strategy: str = 'random',
+    random_state: Optional[int] = None,
+    detector_file_path: Optional[str] = None,
+) -> Tuple[List[str], List[str]]:
+    """Split a csv with labels in train and test data."""
+    label_dict = {key: val for key, val in load_csv(label_file_path)}
+
+    if detector_file_path is not None:
+        detector_dict = load_json(detector_file_path)
+        print('Filtering out images with no detected object.')
+        new_keys = [
+            key for key, val in detector_dict.items() if len(val['detections']) > 0
+        ]
+        print(
+            'Filtered out {} elements. Current dataset size is {}.'.format(
+                len(label_dict) - len(new_keys), len(new_keys)
+            )
+        )
+        label_dict = {key: label_dict[key] for key in new_keys}
+
+    if strategy == 'random':
+        return do_random_split(list(label_dict.keys()), splits, random_state)
+    elif strategy == 'stratified':
+        raise NotImplementedError()
+    raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
+
+
+def do_random_split(
+    ls: List[str],
+    splits: Tuple[float, float],
+    random_state: Optional[int] = None,
+) -> Tuple[List, List]:
+    """Split a list in two lists in random order with a predefined fraction."""
+    num_samples = len(ls)
+    idx_bound = int(num_samples * splits[0])
+    Random(random_state).shuffle(ls.copy())
+    return ls[:idx_bound], ls[idx_bound:]
+
+
+# --------------------------------------------------------------------------------------
 
 
 class DatasetConverter:

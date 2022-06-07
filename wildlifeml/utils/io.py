@@ -3,6 +3,7 @@ import csv
 import json
 from typing import (
     Any,
+    Dict,
     List,
     Optional,
 )
@@ -13,6 +14,12 @@ from PIL import Image
 def load_image(file_path: str, mode: str = 'RGB') -> Image:
     """Load an image from a path."""
     return Image.open(file_path).convert(mode)
+
+
+def load_json(file_path: str) -> Dict:
+    """Load a json file as dictionary."""
+    with open(file_path, 'r') as f:
+        return json.load(f)
 
 
 def load_csv(file_path: str, ignore_header: bool = False) -> List[List[str]]:
