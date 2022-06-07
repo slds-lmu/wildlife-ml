@@ -52,15 +52,21 @@ def do_train_split(
     strategy: str = 'random',
     random_state: Optional[int] = None,
     detector_file_path: Optional[str] = None,
+    min_threshold: float = 0.0,
 ) -> Tuple[List[str], List[str]]:
-    """Split a csv with labels in train and test data."""
+    """Split a csv with labels in train & test data and filter with detector results."""
     label_dict = {key: val for key, val in load_csv(label_file_path)}
 
     if detector_file_path is not None:
         detector_dict = load_json(detector_file_path)
-        print('Filtering out images with no detected object.')
+        print(
+            'Filtering images with no detected object '
+            'and not satisfying minimum threshold.'
+        )
         new_keys = [
-            key for key, val in detector_dict.items() if len(val['detections']) > 0
+            key
+            for key, val in detector_dict.items()
+            if len(val['detections']) > 0 or val['max_detection_conf'] <= min_threshold
         ]
         print(
             'Filtered out {} elements. Current dataset size is {}.'.format(
