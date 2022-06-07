@@ -1,6 +1,8 @@
 """Classes for accessing data."""
 import os
+import random
 import shutil
+from math import ceil
 from random import Random
 from typing import (
     List,
@@ -9,11 +11,14 @@ from typing import (
 )
 
 import numpy as np
+from tensorflow.image import resize
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
+from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.utils.io import (
     load_csv,
+    load_image,
     load_json,
     save_as_csv,
     save_as_json,
@@ -24,23 +29,68 @@ from wildlifeml.utils.misc import list_files
 class WildlifeDataset(Sequence):
     """Dataset object for handling wildlife datasets with bounding boxes."""
 
-    def __init__(self, batch_size: int, shuffle: bool = True) -> None:
+    def __init__(
+        self,
+        keys: List[str],
+        label_file_path: str,
+        detector_file_path: str,
+        batch_size: int,
+        shuffle: bool = True,
+        resolution: int = 256,
+        do_cropping: bool = True,
+        rectify: bool = True,
+        fill: bool = True,
+    ) -> None:
         """Initialize a WildlifeDataset object."""
+        self.keys = keys
+        self.label_dict = {key: val for key, val in load_csv(label_file_path)}
+
+        self.detector_dict = load_json(detector_file_path)
+
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.target_resolution = resolution
+
+        self.do_cropping = do_cropping
+        self.cropper = Cropper(rectify=rectify, fill=fill)
 
     def on_epoch_end(self) -> None:
         """Execute after every epoch in the keras `.fit()` method."""
         if self.shuffle:
-            pass
+            random.shuffle(self.keys)
 
     def __len__(self) -> int:
         """Return the number of batches in the dataset."""
-        pass
+        return ceil(len(self.keys) / self.batch_size)
 
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
         """Return a batch with training data and labels."""
-        pass
+        # Extract keys that correspond with batch.
+        start_idx = idx * self.batch_size
+        end_idx = min(len(self.keys), start_idx + self.batch_size)
+        batch_keys = self.keys[start_idx:end_idx]
+
+        imgs = []
+        for key in batch_keys:
+            entry = self.detector_dict[key]
+            img = np.asarray(load_image(entry['file']))
+
+            # Crop according to bounding box if applicable
+            if self.do_cropping and len(entry['detections']) > 0:
+                img = self.cropper.crop(img, bbox=entry['detections'][0]['bbox'])
+
+            # Resize to target resolution for network
+            img = resize(img, (self.target_resolution, self.target_resolution))
+
+            # Rescale to [0, 1] range
+            img /= 255
+
+            imgs.append(img)
+
+        # Extract labels
+        labels = np.asarray([self.label_dict[key] for key in batch_keys])
+
+        return np.stack(imgs), labels
 
 
 # --------------------------------------------------------------------------------------
