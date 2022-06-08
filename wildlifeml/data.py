@@ -12,6 +12,7 @@ from typing import (
 
 import numpy as np
 from tensorflow.image import resize
+from tensorflow.keras import Sequential
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
@@ -37,6 +38,7 @@ class WildlifeDataset(Sequence):
         batch_size: int,
         shuffle: bool = True,
         resolution: int = 224,
+        augmentation: Optional[Sequential] = None,
         do_cropping: bool = True,
         rectify: bool = True,
         fill: bool = True,
@@ -49,8 +51,9 @@ class WildlifeDataset(Sequence):
 
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.target_resolution = resolution
 
+        self.target_resolution = resolution
+        self.augmentation = augmentation
         self.do_cropping = do_cropping
         self.cropper = Cropper(rectify=rectify, fill=fill)
 
@@ -84,6 +87,10 @@ class WildlifeDataset(Sequence):
 
             # Rescale to [0, 1] range
             img /= 255
+
+            # Apply data augmentations to image
+            if self.augmentation is not None:
+                img = self.augmentation(img)
 
             imgs.append(img)
 
