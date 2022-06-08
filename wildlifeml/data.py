@@ -36,7 +36,7 @@ class WildlifeDataset(Sequence):
         detector_file_path: str,
         batch_size: int,
         shuffle: bool = True,
-        resolution: int = 256,
+        resolution: int = 224,
         do_cropping: bool = True,
         rectify: bool = True,
         fill: bool = True,
@@ -155,11 +155,11 @@ class DatasetConverter:
     ```
     └── images
         ├── class01
-            ├── img1
+            ├── img01
             ├── ...
-            └── imgx
-        ├── class01
+            └── imgxx
         ├── class02
+        ├── class03
         ├── ...
         └── classxx
     ```
@@ -168,7 +168,7 @@ class DatasetConverter:
     ├── labels.csv
     ├── label_map.json
     └── images
-        ├── class01_img1
+        ├── class01_img01
         ├── ...
         └── class01_imgx
     ```
