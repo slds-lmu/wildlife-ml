@@ -18,7 +18,7 @@ from tqdm import trange
 from wildlifeml.utils.io import load_image, save_as_json
 from wildlifeml.utils.misc import (
     download_file,
-    list_image_paths,
+    list_files,
     truncate_float,
 )
 
@@ -62,20 +62,22 @@ class MegaDetector:
 
     def predict_directory(
         self, directory: str, save_file: bool = True, output_file: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> Dict:
         """
         Predict bounding boxes for a directory.
 
-        The directory is traversed recursively.
+        The directory is NOT traversed recursively. All images should be in one flat
+        directory.
         Note: A batch size > 1 only works if all images in the directory have the
         same shape.
         """
-        file_paths = list_image_paths(directory)
+        file_names = list_files(directory)
+        file_paths = [os.path.abspath(os.path.join(directory, f)) for f in file_names]
         print('Found {} image files in "{}"'.format(len(file_paths), directory))
 
         # Traverse through list according to batch size.
         print('Predicting bounding boxes ...')
-        output_list = []
+        output_dict = {}
         for i in trange(0, len(file_paths), self.batch_size):
             batch_files = file_paths[i : i + self.batch_size]
 
@@ -83,10 +85,10 @@ class MegaDetector:
             imgs = np.stack([np.asarray(load_image(path)) for path in batch_files])
             # Predict bounding boxes
             batch_result = self.predict(imgs)
-            # Update with file paths
-            [r.update({'file': f}) for r, f in zip(batch_result, batch_files)]
-            # Add batch results to main output
-            output_list.extend(batch_result)
+            # Update results with file information and add to output
+            for result, f_path in zip(batch_result, batch_files):
+                result.update({'file': f_path})
+                output_dict.update({os.path.split(f_path)[1]: result})
 
         print('Processing finished.')
 
@@ -94,10 +96,10 @@ class MegaDetector:
         if save_file:
             if output_file is None:
                 output_file = directory + '_megadetector.json'
-            save_as_json(output_list, output_file)
+            save_as_json(output_dict, output_file)
             print('Results were saved in "{}"'.format(output_file))
 
-        return output_list
+        return output_dict
 
     def predict(self, imgs: np.ndarray) -> List[Dict]:
         """Predict bounding boxes for a numpy array."""

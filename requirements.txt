@@ -1,6 +1,7 @@
 -e .
 
 click
+matplotlib
 numpy
 pillow
 pre-commit
