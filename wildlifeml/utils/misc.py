@@ -1,5 +1,4 @@
 """Miscellaneous utilities."""
-import glob
 import math
 import os
 from typing import List, Tuple
@@ -18,14 +17,14 @@ def download_file(url: str, target_path: str) -> None:
     request.urlretrieve(url, target_path)
 
 
-def list_image_paths(
+def list_files(
     directory: str, extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.gif', '.png')
 ) -> List[str]:
-    """Traverse directory recursively and return absolute paths matching extension."""
+    """List all files in a directory that match the extension."""
     file_paths = []
-    for filename in glob.iglob(directory + '/**/*', recursive=True):
-        if filename.lower().endswith(extensions):
-            file_paths.append(os.path.abspath(filename))
+    for file_name in os.listdir(directory):
+        if file_name.lower().endswith(extensions):
+            file_paths.append(file_name)
     return file_paths
 
 
