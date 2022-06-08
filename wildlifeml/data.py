@@ -85,9 +85,6 @@ class WildlifeDataset(Sequence):
             # Resize to target resolution for network
             img = resize(img, (self.target_resolution, self.target_resolution))
 
-            # Rescale to [0, 1] range
-            img /= 255
-
             # Apply data augmentations to image
             if self.augmentation is not None:
                 img = self.augmentation(img)
