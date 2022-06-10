@@ -6,13 +6,13 @@ from typing import (
 )
 
 import tensorflow as tf
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Lambda
+from tensorflow.keras.models import Sequential
 
 AVAILABLE_MODELS: Final = {
     'resnet50': {
         'model': tf.keras.applications.ResNet50V2,
-        'input_shape': (224, 224),
+        'input_shape': (224, 224, 3),
         'preproc_func': tf.keras.applications.resnet_v2.preprocess_input,
     }
 }
@@ -28,7 +28,7 @@ class ModelFactory:
         weights: str = 'imagenet',
         include_top: bool = False,
         pooling: str = 'avg',
-    ) -> Tuple[tf.keras.Model, Callable]:
+    ) -> Tuple[Sequential, Callable]:
         """
         Return an initialized model instance from an identifier.
 
@@ -36,10 +36,13 @@ class ModelFactory:
         """
         model_entry = AVAILABLE_MODELS[model_id]
         model_cls = model_entry['model']
-        model = model_cls(weights=weights, include_top=include_top, pooling=pooling)
-        prediction = Dense(num_classes, activation='softmax')(model.output)
+
+        model = Sequential()
+        model.add(Lambda(model_entry['preproc_func']))
+        model.add(model_cls(weights=weights, include_top=include_top, pooling=pooling))
+        model.add(Dense(num_classes, activation='softmax'))
 
         return (
-            Model(inputs=model.input, outputs=prediction),
+            model,
             model_entry['preproc_func'],
         )

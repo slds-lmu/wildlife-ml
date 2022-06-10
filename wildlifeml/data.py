@@ -10,9 +10,8 @@ from typing import (
     Tuple,
 )
 
+import albumentations as A
 import numpy as np
-from tensorflow.image import resize
-from tensorflow.keras import Sequential
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
@@ -38,29 +37,35 @@ class WildlifeDataset(Sequence):
         batch_size: int,
         shuffle: bool = True,
         resolution: int = 224,
-        augmentation: Optional[Sequential] = None,
+        augmentation: Optional[A.Compose] = None,
         do_cropping: bool = True,
         rectify: bool = True,
         fill: bool = True,
     ) -> None:
         """Initialize a WildlifeDataset object."""
         self.keys = keys
-        self.label_dict = {key: val for key, val in load_csv(label_file_path)}
+        self.label_dict = {key: float(val) for key, val in load_csv(label_file_path)}
 
         self.detector_dict = load_json(detector_file_path)
 
         self.batch_size = batch_size
         self.shuffle = shuffle
+        if self.shuffle:
+            self._exec_shuffle()
 
         self.target_resolution = resolution
         self.augmentation = augmentation
         self.do_cropping = do_cropping
         self.cropper = Cropper(rectify=rectify, fill=fill)
 
+    def _exec_shuffle(self) -> None:
+        """Shuffle the dataset."""
+        random.shuffle(self.keys)
+
     def on_epoch_end(self) -> None:
         """Execute after every epoch in the keras `.fit()` method."""
         if self.shuffle:
-            random.shuffle(self.keys)
+            self._exec_shuffle()
 
     def __len__(self) -> int:
         """Return the number of batches in the dataset."""
@@ -83,18 +88,20 @@ class WildlifeDataset(Sequence):
                 img = self.cropper.crop(img, bbox=entry['detections'][0]['bbox'])
 
             # Resize to target resolution for network
-            img = resize(img, (self.target_resolution, self.target_resolution))
+            img = A.resize(
+                img, height=self.target_resolution, width=self.target_resolution
+            )
 
             # Apply data augmentations to image
             if self.augmentation is not None:
-                img = self.augmentation(img)
+                img = self.augmentation(image=img)['image']
 
             imgs.append(img)
 
         # Extract labels
         labels = np.asarray([self.label_dict[key] for key in batch_keys])
 
-        return np.stack(imgs), labels
+        return np.stack(imgs).astype(float), labels
 
 
 # --------------------------------------------------------------------------------------
@@ -120,7 +127,7 @@ def do_train_split(
         new_keys = [
             key
             for key, val in detector_dict.items()
-            if len(val['detections']) > 0 or val['max_detection_conf'] <= min_threshold
+            if len(val['detections']) > 0 or val['max_detection_conf'] >= min_threshold
         ]
         print(
             'Filtered out {} elements. Current dataset size is {}.'.format(

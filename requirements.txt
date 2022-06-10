@@ -1,5 +1,6 @@
 -e .
 
+albumentations
 click
 matplotlib
 numpy

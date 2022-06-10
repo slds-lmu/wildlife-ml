@@ -1,7 +1,12 @@
 """Classes for managing training."""
-from typing import Any, List
+from typing import (
+    Any,
+    List,
+    Optional,
+)
 
-from tensorflow.keras import Model, Sequence
+from tensorflow.keras import Model
+from tensorflow.keras.utils import Sequence
 
 from wildlifeml.training.models import ModelFactory
 
@@ -11,18 +16,18 @@ class WildlifeTrainer:
 
     def __init__(
         self,
-        model_backbone: str,
+        batch_size: int,
         loss_func: Any,
         num_classes: int,
         transfer_epochs: int,
-        transfer_optimizer: Any,
-        transfer_callbacks: List,
         finetune_epochs: int,
+        transfer_optimizer: Any,
         finetune_optimizer: Any,
-        finetune_callbacks: List,
         finetune_layers: int,
-        batch_size: int,
-        num_workers: int,
+        model_backbone: str = 'resnet50',
+        transfer_callbacks: Optional[List] = None,
+        finetune_callbacks: Optional[List] = None,
+        num_workers: int = 0,
     ) -> None:
         """Initialize trainer object."""
         self.num_classes = num_classes
@@ -42,20 +47,26 @@ class WildlifeTrainer:
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-    def fit(self, dataset: Sequence) -> Model:
+    def fit(self, train_dataset: Sequence, test_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""
         if self.transfer_epochs > 0:
             print('---> Compiling model')
-            self.model.compile(optimizer=self.transfer_optimizer, loss=self.loss_func)
+            self.model.compile(
+                optimizer=self.transfer_optimizer,
+                loss=self.loss_func,
+                metrics=['accuracy'],
+            )
 
             print('---> Starting transfer learning')
             for layer in self.model.layers[:-1]:
                 layer.trainable = False
 
             self.model.fit(
-                x=dataset,
+                x=train_dataset,
+                validation_data=test_dataset,
                 batch_size=self.batch_size,
                 epochs=self.transfer_epochs,
+                callbacks=self.transfer_callbacks,
                 workers=self.num_workers,
                 use_multiprocessing=self.num_workers > 0,
             )
@@ -68,13 +79,19 @@ class WildlifeTrainer:
                 layer.trainable = True
 
             print('---> Compiling model')
-            self.model.compile(optimizer=self.finetune_optimizer, loss=self.loss_func)
+            self.model.compile(
+                optimizer=self.finetune_optimizer,
+                loss=self.loss_func,
+                metrics=['accuracy'],
+            )
 
             print('---> Starting fine tuning')
             self.model.fit(
-                x=dataset,
+                x=train_dataset,
+                validation_data=test_dataset,
                 batch_size=self.batch_size,
                 epochs=self.finetune_epochs,
+                callbacks=self.finetune_callbacks,
                 workers=self.num_workers,
                 use_multiprocessing=self.num_workers > 0,
             )
