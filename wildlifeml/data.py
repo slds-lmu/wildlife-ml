@@ -83,7 +83,7 @@ class WildlifeDataset(Sequence):
                 img = self.cropper.crop(img, bbox=entry['detections'][0]['bbox'])
 
             # Resize to target resolution for network
-            img = resize(img, (self.target_resolution, self.target_resolution))
+            # img = resize(img, (self.target_resolution, self.target_resolution))
 
             # Apply data augmentations to image
             if self.augmentation is not None:
