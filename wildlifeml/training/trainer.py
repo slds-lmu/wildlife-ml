@@ -5,6 +5,7 @@ from typing import (
     Optional,
 )
 
+from tensorflow import keras
 from tensorflow.keras import Model
 from tensorflow.keras.utils import Sequence
 
@@ -97,3 +98,11 @@ class WildlifeTrainer:
             )
 
         return self.model
+
+    def save_model(self, file_path) -> None:
+        """Save a model checkpoint."""
+        self.model.save(file_path)
+
+    def load_model(self, file_path) -> None:
+        """Load a model from a checkpoint."""
+        self.model = keras.models.load_model(file_path)

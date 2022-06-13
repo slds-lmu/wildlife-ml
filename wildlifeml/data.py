@@ -32,9 +32,9 @@ class WildlifeDataset(Sequence):
     def __init__(
         self,
         keys: List[str],
-        label_file_path: str,
         detector_file_path: str,
         batch_size: int,
+        label_file_path: Optional[str] = None,
         shuffle: bool = True,
         resolution: int = 224,
         augmentation: Optional[A.Compose] = None,
@@ -44,7 +44,15 @@ class WildlifeDataset(Sequence):
     ) -> None:
         """Initialize a WildlifeDataset object."""
         self.keys = keys
-        self.label_dict = {key: float(val) for key, val in load_csv(label_file_path)}
+
+        if label_file_path is not None:
+            self.is_supervised = True
+            self.label_dict = {
+                key: float(val) for key, val in load_csv(label_file_path)
+            }
+        else:
+            self.is_supervised = False
+            self.label_dict = {}
 
         self.detector_dict = load_json(detector_file_path)
 
@@ -99,7 +107,11 @@ class WildlifeDataset(Sequence):
             imgs.append(img)
 
         # Extract labels
-        labels = np.asarray([self.label_dict[key] for key in batch_keys])
+        if self.is_supervised:
+            labels = np.asarray([self.label_dict[key] for key in batch_keys])
+        else:
+            # We need to add a dummy for unsupervised case because TF.
+            labels = np.zeros(shape=self.batch_size, dtype=float)
 
         return np.stack(imgs).astype(float), labels
 

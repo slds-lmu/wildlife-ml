@@ -101,7 +101,7 @@ def main(
     )
 
     test_dataset = WildlifeDataset(
-        keys=train_keys,
+        keys=test_keys,
         label_file_path=label_file,
         detector_file_path=detector_file,
         batch_size=CFG['batch_size'],
