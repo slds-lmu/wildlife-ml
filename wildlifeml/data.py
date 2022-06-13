@@ -142,11 +142,11 @@ def do_train_split(
             )
         stratify_1 = [val for val in label_dict.values()]
         # TODO define correct way of reading csv file
-        stratify_2 = {
+        stratify_2 = [
             val  # val[stratify_var]
             for key, val in load_csv(meta_file_path)
             if key in label_dict.keys()
-        }
+        ]
         stratify = np.dstack(stratify_1, stratify_2)
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
