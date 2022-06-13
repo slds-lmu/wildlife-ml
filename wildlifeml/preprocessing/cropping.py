@@ -7,10 +7,10 @@ import numpy as np
 class Cropper:
     """Cropping module for extracting the content of bounding boxes."""
 
-    def __init__(self, rectify: bool = True, fill: bool = True) -> None:
+    def __init__(self, rescale_bbox: bool = True, pad: bool = True) -> None:
         """Initialize Cropper object."""
-        self.rectify = rectify
-        self.fill = fill
+        self.rescale_bbox = rescale_bbox
+        self.pad = pad
 
     def crop(
         self, img: np.ndarray, bbox: Tuple[float, float, float, float]
@@ -21,13 +21,13 @@ class Cropper:
         # Convert the relative coords from megadetector output to absolute indices.
         x_coords, y_coords = Cropper.get_absolute_coords(bbox, dims=(height, width))
 
-        if self.rectify:
+        if self.rescale_bbox:
             # Correct bounding box for rectangular network input
             x_coords, y_coords = Cropper.rectify_bbox(
                 x_coords, y_coords, dims=(height, width)
             )
 
-        if self.fill:
+        if self.pad:
             # Ensures a square as output, but could contain black borders
             x_length = x_coords[1] - x_coords[0]
             y_length = y_coords[1] - y_coords[0]
@@ -55,15 +55,15 @@ class Cropper:
         return (x_start, x_end), (y_start, y_end)
 
     @staticmethod
-    def rectify_bbox(
+    def rescale_bbox(
         x_coords: Tuple[int, int], y_coords: Tuple[int, int], dims: Tuple[int, int]
     ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         """
-        Rectify bounding box.
+        Adjust bounding box to be square if possible.
 
         For maintaining the aspect ratio in the subsequent resizing process,
         the bounding box is rescaled. The longest edge serves as base.
-        Note: In very weird aspect ratios and large bounding boxes, this could result
+        Note: with extreme aspect ratios and large bounding boxes, this could result
         in non-quadratic bbox outputs!
         """
         height, width = dims
