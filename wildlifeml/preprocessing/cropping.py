@@ -32,14 +32,13 @@ class Cropper:
             x_length = x_coords[1] - x_coords[0]
             y_length = y_coords[1] - y_coords[0]
             edge_length = max(x_length, y_length)
-            cropped_img = np.zeros((edge_length, edge_length, 3), dtype=img.dtype)
-            # Sorry for spaghet
-            cropped_img[:y_length, :x_length] = img[
-                y_coords[0] : y_coords[1], x_coords[0] : x_coords[1]
-            ]
+            cropped_img = np.pad(
+                img[y_coords[0]: y_coords[1], x_coords[0]: x_coords[1]],
+                [(0, edge_length - y_length), (0, edge_length - x_length), (0, 0)],
+            )
             return cropped_img
 
-        return img[y_coords[0] : y_coords[1] + 1, x_coords[0] : x_coords[1] + 1]
+        return img[y_coords[0]: y_coords[1] + 1, x_coords[0]: x_coords[1] + 1]
 
     @staticmethod
     def get_absolute_coords(
@@ -69,28 +68,18 @@ class Cropper:
         """
         height, width = dims
 
-        # set x, y length to next-lower even number to make things easier
         x_length = (x_coords[1] - x_coords[0])
         y_length = (y_coords[1] - y_coords[0])
         diff_xy = x_length - y_length
         half_diff = 0.5 * abs(diff_xy)
 
         if diff_xy > 0:
-            # new_y_end = min(y_coords[0] + x_length, height - 1)
-            # new_y_start = max(new_y_end - x_length, 0)
-            new_y_end = min(y_coords[0] + np.floor(0.5 * abs(diff_xy)), width - 1)
-            new_y_start = max(new_y_end - np.ceil(0.5 * abs(diff_xy)), 0)
-            y_coords = (new_y_start, new_y_end)
+            y_start = max(y_coords[0] - np.ceil(half_diff), 0)
+            y_end = min(y_coords[1] + np.floor(half_diff), height - 1)
+            y_coords = (int(y_start), int(y_end))
         elif diff_xy < 0:
-            margin_l = x_coords[0]
-            margin_r = width - x_coords[1]
-            new_x_start = x_coords[0] - min(margin_l, half_diff)
-            rest_diff = max(half_diff - margin_l, 0) + half_diff
-            new_x_end = x_coords[1] + min(margin_r, rest_diff)
-            new_x_start = max(new_x_start - (rest_diff - margin_r), 0)
-            # new_x_end = int(min(x_coords[1] + np.floor(0.5 * abs(diff_xy)), width - 1))
-            # new_x_start = int(max(x_coords[0] - np.ceil(0.5 * abs(diff_xy)), 0))
-            breakpoint()
-            x_coords = (new_x_start, new_x_end)
+            x_start = max(x_coords[0] - np.ceil(half_diff), 0)
+            x_end = min(x_coords[1] + np.floor(half_diff), width - 1)
+            x_coords = (int(x_start), int(x_end))
 
         return x_coords, y_coords

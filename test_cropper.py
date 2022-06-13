@@ -7,17 +7,15 @@ detect = False
 
 megadetector = MegaDetector(batch_size=1, confidence_threshold=0.8)
 
-# if not os.path.exists('example_data_megadetector.json'):
-#     md_results = megadetector.predict_directory('example_data')
 if detect:
     md_results = megadetector.predict_directory('example_data')
 dataset = WildlifeDataset(
-    keys=['example4.JPG'],
+    keys=['example.JPG'],
     label_file_path='example_data/labels.csv',
     detector_file_path='example_data_megadetector.json',
     batch_size=1,
     rectify=True,
-    fill=False,
+    fill=True,
 )
 
 example = dataset[0][0][0]
