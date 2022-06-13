@@ -3,7 +3,6 @@ import os
 import random
 import shutil
 from math import ceil
-from random import Random
 from typing import (
     List,
     Optional,
@@ -11,6 +10,7 @@ from typing import (
 )
 
 import numpy as np
+from sklearn.model_selection import train_test_split
 from tensorflow.image import resize
 from tensorflow.keras import Sequential
 from tensorflow.keras.utils import Sequence
@@ -102,12 +102,14 @@ class WildlifeDataset(Sequence):
 
 def do_train_split(
     label_file_path: str,
-    splits: Tuple[float, float],
+    splits: Tuple[float, float, float],
     strategy: str = 'random',
+    meta_file_path: Optional[str] = None,
+    stratify_var: Optional[str] = None,
     random_state: Optional[int] = None,
     detector_file_path: Optional[str] = None,
     min_threshold: float = 0.0,
-) -> Tuple[List[str], List[str]]:
+) -> Tuple[List[str], List[str], List[str]]:
     """Split a csv with labels in train & test data and filter with detector results."""
     label_dict = {key: val for key, val in load_csv(label_file_path)}
 
@@ -120,7 +122,7 @@ def do_train_split(
         new_keys = [
             key
             for key, val in detector_dict.items()
-            if len(val['detections']) > 0 or val['max_detection_conf'] <= min_threshold
+            if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
         ]
         print(
             'Filtered out {} elements. Current dataset size is {}.'.format(
@@ -130,22 +132,44 @@ def do_train_split(
         label_dict = {key: label_dict[key] for key in new_keys}
 
     if strategy == 'random':
-        return do_random_split(list(label_dict.keys()), splits, random_state)
-    elif strategy == 'stratified':
-        raise NotImplementedError()
-    raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
+        stratify = None
+    elif strategy == 'class':
+        stratify = [val for val in label_dict.values()]
+    elif strategy == 'class_plus_custom':
+        if meta_file_path is None or stratify_var is None:
+            raise ValueError(
+                f'Strategy "{strategy}" requires metadata and variable specification'
+            )
+        stratify_1 = [val for val in label_dict.values()]
+        # TODO define correct way of reading csv file
+        stratify_2 = {
+            val  # val[stratify_var]
+            for key, val in load_csv(meta_file_path)
+            if key in label_dict.keys()
+        }
+        stratify = np.dstack(stratify_1, stratify_2)
+    else:
+        raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
 
+    keys_train, keys_test = train_test_split(
+        [k for k in label_dict.keys()],
+        splits[0] + splits[1],
+        splits[2],
+        random_state,
+        stratify=stratify,
+    )
+    keys_val = []
 
-def do_random_split(
-    ls: List[str],
-    splits: Tuple[float, float],
-    random_state: Optional[int] = None,
-) -> Tuple[List, List]:
-    """Split a list in two lists in random order with a predefined fraction."""
-    num_samples = len(ls)
-    idx_bound = int(num_samples * splits[0])
-    Random(random_state).shuffle(ls.copy())
-    return ls[:idx_bound], ls[idx_bound:]
+    if splits[1] > 0:
+        keys_train, keys_val = train_test_split(
+            keys_train,
+            splits[0],
+            splits[1],
+            random_state,
+            stratify=stratify,
+        )
+
+    return keys_train, keys_val, keys_test
 
 
 # --------------------------------------------------------------------------------------
