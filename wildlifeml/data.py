@@ -17,9 +17,8 @@ from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
 from wildlifeml.preprocessing.cropping import Cropper
-from wildlifeml.utils.io import (
+from wildlifeml.utils.io import (  # load_csv_long,
     load_csv,
-    load_csv_long,
     load_image,
     load_json,
     save_as_csv,
@@ -112,8 +111,8 @@ def do_train_split(
     min_threshold: float = 0.0,
 ) -> Tuple[List[str], List[str], List[str]]:
     """Split a csv with labels in train & test data and filter with detector results."""
-    label_dict = {key: val for key, val in load_csv_long(label_file_path)}
     breakpoint()
+    label_dict = {key: val for key, val in load_csv(label_file_path)}
 
     if detector_file_path is not None:
         detector_dict = load_json(detector_file_path)
