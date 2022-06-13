@@ -134,16 +134,16 @@ def do_train_split(
     if strategy == 'random':
         stratify = None
     elif strategy == 'class':
-        stratify = [val for val in label_dict.values()]
+        stratify = [int(val) for val in label_dict.values()]
     elif strategy == 'class_plus_custom':
         if meta_file_path is None or stratify_var is None:
             raise ValueError(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
-        stratify_1 = [val for val in label_dict.values()]
+        stratify_1 = [int(val) for val in label_dict.values()]
         # TODO define correct way of reading csv file
         stratify_2 = [
-            val  # val[stratify_var]
+            int(val)  # val[stratify_var]
             for key, val in load_csv(meta_file_path)
             if key in label_dict.keys()
         ]
