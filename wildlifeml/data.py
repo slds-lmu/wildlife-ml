@@ -40,8 +40,8 @@ class WildlifeDataset(Sequence):
         resolution: int = 224,
         augmentation: Optional[Sequential] = None,
         do_cropping: bool = True,
-        rectify: bool = True,
-        fill: bool = True,
+        rescale_bbox: bool = True,
+        pad: bool = True,
     ) -> None:
         """Initialize a WildlifeDataset object."""
         self.keys = keys
@@ -55,7 +55,7 @@ class WildlifeDataset(Sequence):
         self.target_resolution = resolution
         self.augmentation = augmentation
         self.do_cropping = do_cropping
-        self.cropper = Cropper(rectify=rectify, fill=fill)
+        self.cropper = Cropper(rescale_bbox=rescale_bbox, pad=pad)
 
     def on_epoch_end(self) -> None:
         """Execute after every epoch in the keras `.fit()` method."""
