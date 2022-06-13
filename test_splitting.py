@@ -7,6 +7,7 @@ detect = True
 megadetector = MegaDetector(batch_size=512, confidence_threshold=0.8)
 
 root = '../../../../common/bothmannl/'
+breakpoint()
 img_dir = os.path.join(root, 'wildlife_images/usecase2/original_images/')
 megadetector.predict_directory(img_dir, output_file='uc2_md_new.json')
 
