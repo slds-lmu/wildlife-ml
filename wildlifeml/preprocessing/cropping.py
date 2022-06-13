@@ -9,7 +9,7 @@ class Cropper:
 
     def __init__(self, rescale_bbox: bool = True, pad: bool = True) -> None:
         """Initialize Cropper object."""
-        self.rescale_bbox = rescale_bbox
+        self.rescale = rescale_bbox
         self.pad = pad
 
     def crop(
@@ -21,9 +21,9 @@ class Cropper:
         # Convert the relative coords from megadetector output to absolute indices.
         x_coords, y_coords = Cropper.get_absolute_coords(bbox, dims=(height, width))
 
-        if self.rescale_bbox:
+        if self.rescale:
             # Correct bounding box for rectangular network input
-            x_coords, y_coords = Cropper.rectify_bbox(
+            x_coords, y_coords = Cropper.rescale_bbox(
                 x_coords, y_coords, dims=(height, width)
             )
 
