@@ -157,6 +157,8 @@ def do_train_split(
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
 
+    keys_train, keys_test = [], []
+
     stratification_warning = (
         'Stratified sampling with sklearn is only supported for stratifying '
         'variables with sufficient amount of counts per category. Try '
@@ -174,8 +176,6 @@ def do_train_split(
     except ValueError as e:
         if bool(re.search('least populated class', str(e))):
             print(stratification_warning)
-    else:
-        keys_train, keys_test = [], []
 
     if splits[1] > 0:
 
