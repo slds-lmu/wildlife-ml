@@ -143,10 +143,11 @@ def do_train_split(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
         stratify_1 = [val for val in label_dict.values()]
+        meta_file = load_csv(meta_file_path)
         breakpoint()
         stratify_2 = [
             int(val)  # val[stratify_var]
-            for key, val in load_csv(meta_file_path)
+            for key, val in meta_file
             if key in label_dict.keys()
         ]
         stratify = np.dstack(stratify_1, stratify_2)
