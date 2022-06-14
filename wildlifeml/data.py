@@ -160,10 +160,12 @@ def do_train_split(
     keys_val = []
 
     if splits[1] > 0:
-        stratify_1 = ['1' for x in meta_file]
-        # [val for key, val in label_dict.values() if key in keys_train]
-        stratify_2 = [1 for x in meta_file]
-        stratify = np.dstack(stratify_1, stratify_2)
+        if strategy == 'class':
+            stratify = [val for key, val in label_dict.items() if key in new_keys]
+        elif strategy == 'class_plus_custom':
+            stratify_1 = [val for key, val in label_dict.items() if key in new_keys]
+            stratify_2 = [1 for x in meta_file]
+            stratify = np.dstack(stratify_1, stratify_2)
         keys_train, keys_val = train_test_split(
             keys_train,
             train_size=splits[0],
