@@ -144,7 +144,7 @@ def do_train_split(
             )
         meta_dict = {key: value for key, value in load_csv(meta_file_path)}
         stratify_1 = [val for val in label_dict.values()]
-        stratify_2 = [val for val in meta_dict.values()]
+        stratify_2 = [val for key, val in meta_dict.items() if key in label_dict.keys()]
         stratify = np.dstack((stratify_1, stratify_2))
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
