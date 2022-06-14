@@ -17,11 +17,8 @@ label_dict = [{'id': x['orig_name'], 'class': x['true_class']} for x in label_fi
 save_as_csv_dict(label_dict, 'uc2_labels_new.csv', header=['id', 'class'])
 
 meta_file = label_file
-meta_dict = [
-    {'id': x['orig_name'], 'class': x['true_class'], 'stratifier': x['station']}
-    for x in label_file
-]
-save_as_csv_dict(meta_dict, 'uc2_meta.csv', header=['id', 'class', 'stratifier'])
+meta_dict = [{'id': x['orig_name'], 'stratifier': x['station']} for x in label_file]
+save_as_csv_dict(meta_dict, 'uc2_meta.csv', header=['id', 'stratifier'])
 
 train_keys, val_keys, test_keys = do_train_split(
     label_file_path='uc2_labels_new.csv',

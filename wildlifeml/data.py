@@ -19,7 +19,6 @@ from tqdm import tqdm
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.utils.io import (
     load_csv,
-    load_csv_dict,
     load_image,
     load_json,
     save_as_csv,
@@ -143,9 +142,9 @@ def do_train_split(
             raise ValueError(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
-        meta_file = load_csv_dict(meta_file_path)
+        meta_dict = {key: value for key, value in load_csv(meta_file_path)}
         stratify_1 = [val for val in label_dict.values()]
-        stratify_2 = [x[stratifier] for x in meta_file]
+        stratify_2 = [val for val in meta_dict.values()]
         stratify = np.dstack((stratify_1, stratify_2))
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
@@ -164,7 +163,7 @@ def do_train_split(
             stratify = [val for key, val in label_dict.items() if key in keys_train]
         elif strategy == 'class_plus_custom':
             stratify_1 = [val for key, val in label_dict.items() if key in keys_train]
-            stratify_2 = [x[stratifier] for x in meta_file if stratifier is not None]
+            stratify_2 = [val for key, val in meta_dict.items() if key in keys_train]
             stratify = np.dstack((stratify_1, stratify_2))
         keys_train, keys_val = train_test_split(
             keys_train,
