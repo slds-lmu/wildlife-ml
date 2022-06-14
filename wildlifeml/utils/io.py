@@ -62,4 +62,5 @@ def save_as_csv_dict(
     """Save a list of rows to a csv file."""
     with open(target, 'w', encoding='UTF8', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
         writer.writerows(rows)
