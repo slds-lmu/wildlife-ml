@@ -53,3 +53,16 @@ def save_as_csv(rows: List, target: str, header: Optional[List] = None) -> None:
             writer.writerow(header)
 
         writer.writerows(rows)
+
+
+# def save_as_csv_long(
+#     rows: List[Dict[str, str]], target: str, header: Optional[List] = None
+# ) -> None:
+#     """Save a list of rows to a csv file."""
+#     with open(target, 'w', encoding='UTF8', newline='') as f:
+#         writer = csv.DictWriter(f)
+#
+#         if header is not None:
+#             writer.writerow(header)
+#
+#         writer.writerows(rows)

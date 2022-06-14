@@ -23,7 +23,7 @@ meta_dict = [
         for x in label_file
     }
 ]
-# save_as_csv(meta_dict, 'uc2_meta.csv', header=['id', 'class', 'stratifier'])
+save_as_csv(meta_dict, 'uc2_meta.csv', header=['id', 'class', 'stratifier'])
 
 train_keys, val_keys, test_keys = do_train_split(
     label_file_path='uc2_labels_new.csv',
