@@ -133,18 +133,17 @@ def do_train_split(
             key: label_dict[key] for key in label_dict.keys() if key in new_keys
         }
 
-    breakpoint()
     if strategy == 'random':
         stratify = None
     elif strategy == 'class':
-        stratify = [int(val) for val in label_dict.values()]
+        stratify = [val for val in label_dict.values()]
     elif strategy == 'class_plus_custom':
         if meta_file_path is None or stratifier is None:
             raise ValueError(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
-        stratify_1 = [int(val) for val in label_dict.values()]
-        # TODO define correct way of reading csv file
+        stratify_1 = [val for val in label_dict.values()]
+        breakpoint()
         stratify_2 = [
             int(val)  # val[stratify_var]
             for key, val in load_csv(meta_file_path)
@@ -156,9 +155,9 @@ def do_train_split(
 
     keys_train, keys_test = train_test_split(
         [k for k in label_dict.keys()],
-        splits[0] + splits[1],
-        splits[2],
-        random_state,
+        test_size=splits[0] + splits[1],
+        train_size=splits[2],
+        random_state=random_state,
         stratify=stratify,
     )
     keys_val = []
@@ -166,9 +165,9 @@ def do_train_split(
     if splits[1] > 0:
         keys_train, keys_val = train_test_split(
             keys_train,
-            splits[0],
-            splits[1],
-            random_state,
+            test_size=splits[0],
+            train_size=splits[1],
+            random_state=random_state,
             stratify=stratify,
         )
 
