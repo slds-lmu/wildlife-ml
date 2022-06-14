@@ -23,6 +23,7 @@ meta_dict = [
         for x in label_file
     }
 ]
+breakpoint()
 save_as_csv(meta_dict, 'uc2_meta.csv', header=['id', 'class', 'stratifier'])
 
 train_keys, val_keys, test_keys = do_train_split(
