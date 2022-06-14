@@ -146,14 +146,12 @@ def do_train_split(
         stratify_1 = [val for val in label_dict.values()]
         stratify_2 = [val for key, val in meta_dict.items() if key in label_dict.keys()]
         stratify = np.dstack((stratify_1, stratify_2)).squeeze(0)
-        counts_1 = [(x, stratify_1.count(x) / len(stratify_1)) for x in set(stratify_1)]
+        counts_1 = [(x, stratify_1.count(x)) for x in set(stratify_1)]
         if stratify_2 is not None:
             counts_2 = [
-                (x, stratify_2.count(x) / len(stratify_2)) for x in set(stratify_2)
+                (x, stratify_2.count(x)) for x in set(stratify_2)
             ]
-        if stratify is not None:
-            counts = [(x, stratify.count(x) / len(stratify)) for x in set(stratify)]
-        print(f'{counts_1}, {counts_2}, {counts}')
+        print(f'{counts_1}, {counts_2}')
         breakpoint()
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
