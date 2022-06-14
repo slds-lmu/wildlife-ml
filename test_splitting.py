@@ -3,7 +3,7 @@ import os
 from wildlifeml.data import do_train_split
 from wildlifeml.preprocessing.megadetector import MegaDetector
 
-detect = True
+detect = False
 megadetector = MegaDetector(batch_size=1, confidence_threshold=0.0)
 
 root = '/common/bothmannl/'
