@@ -71,7 +71,6 @@ class MegaDetector:
         Note: A batch size > 1 only works if all images in the directory have the
         same shape.
         """
-        breakpoint()
         file_names = list_files(directory)
         file_paths = [os.path.abspath(os.path.join(directory, f)) for f in file_names]
         print('Found {} image files in "{}"'.format(len(file_paths), directory))
