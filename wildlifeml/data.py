@@ -145,7 +145,8 @@ def do_train_split(
         meta_dict = {key: value for key, value in load_csv(meta_file_path)}
         stratify_1 = [val for val in label_dict.values()]
         stratify_2 = [val for key, val in meta_dict.items() if key in label_dict.keys()]
-        stratify = np.dstack((stratify_1, stratify_2))
+        stratify = np.dstack((stratify_1, stratify_2)).squeeze(0)
+        breakpoint()
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
 
@@ -164,7 +165,7 @@ def do_train_split(
         elif strategy == 'class_plus_custom':
             stratify_1 = [val for key, val in label_dict.items() if key in keys_train]
             stratify_2 = [val for key, val in meta_dict.items() if key in keys_train]
-            stratify = np.dstack((stratify_1, stratify_2))
+            stratify = np.dstack((stratify_1, stratify_2)).squeeze(0)
         keys_train, keys_val = train_test_split(
             keys_train,
             train_size=splits[0],
