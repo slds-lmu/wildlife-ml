@@ -160,9 +160,9 @@ def do_train_split(
     keys_train, keys_val, keys_test = [], [], []
 
     stratification_warning = (
-        'Stratified sampling with sklearn is only supported for stratifying '
-        'variables with sufficient amount of counts per category. Try '
-        'grouping infrequent categories into larger ones.'
+        'Stratified sampling is only supported for stratifying '
+        'variables with sufficient data support in each category. '
+        'Try grouping infrequent categories into larger ones.'
     )
     try:
         keys_train, keys_test = train_test_split(
@@ -175,7 +175,7 @@ def do_train_split(
 
     except ValueError as e:
         if bool(re.search('least populated class', str(e))):
-            print(stratification_warning)
+            raise ValueError(stratification_warning)
 
     if splits[1] > 0:
 
@@ -203,7 +203,7 @@ def do_train_split(
             )
         except ValueError as e:
             if bool(re.search('least populated class', str(e))):
-                print(print(stratification_warning))
+                raise ValueError(stratification_warning)
 
     return keys_train, keys_val, keys_test
 
