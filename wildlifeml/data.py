@@ -111,6 +111,7 @@ def do_train_split(
     min_threshold: float = 0.0,
 ) -> Tuple[List[str], List[str], List[str]]:
     """Split a csv with labels in train & test data and filter with detector results."""
+    breakpoint()    
     label_dict = {key: value for key, value in load_csv(label_file_path)}
 
     if detector_file_path is not None:

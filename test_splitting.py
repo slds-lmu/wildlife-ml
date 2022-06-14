@@ -13,7 +13,7 @@ if detect:
     megadetector.predict_directory(img_dir, output_file='uc2_md_new.json')
 
 label_file = load_csv_long(os.path.join(root, 'metadata/uc2_labels.csv'))
-label_dict = [{x['orig_name']: x['true_class'] for x in label_file}]
+label_dict = [{x['orig_name']: x['true_class']} for x in label_file]
 save_as_csv(label_dict, 'uc2_labels_new.csv', header=['id', 'class'])
 
 meta_file = label_file
@@ -23,7 +23,6 @@ meta_dict = [
         for x in label_file
     }
 ]
-breakpoint()
 save_as_csv(meta_dict, 'uc2_meta.csv', header=['id', 'class', 'stratifier'])
 
 train_keys, val_keys, test_keys = do_train_split(
