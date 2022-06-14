@@ -17,7 +17,7 @@ if detect:
     megadetector.predict_directory(img_dir, output_file='uc2_md_new.json')
 
 label_file = load_csv_long(os.path.join(root, 'metadata/uc2_labels.csv'))
-label_dict = [{x['orig_name']: x['true_class']} for x in label_file]
+label_dict = [{'id': x['orig_name'], 'class': x['true_class']} for x in label_file]
 save_as_csv_dict(label_dict, 'uc2_labels_new.csv', header=['id', 'class'])
 
 meta_file = label_file
