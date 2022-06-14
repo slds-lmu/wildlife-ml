@@ -105,7 +105,7 @@ def do_train_split(
     splits: Tuple[float, float, float],
     strategy: str = 'random',
     meta_file_path: Optional[str] = None,
-    stratify_var: Optional[str] = None,
+    stratifier: Optional[str] = None,
     random_state: Optional[int] = None,
     detector_file_path: Optional[str] = None,
     min_threshold: float = 0.0,
@@ -138,7 +138,7 @@ def do_train_split(
     elif strategy == 'class':
         stratify = [int(val) for val in label_dict.values()]
     elif strategy == 'class_plus_custom':
-        if meta_file_path is None or stratify_var is None:
+        if meta_file_path is None or stratifier is None:
             raise ValueError(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
