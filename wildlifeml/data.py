@@ -143,11 +143,10 @@ def do_train_split(
             raise ValueError(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
-        breakpoint()
         meta_file = load_csv_dict(meta_file_path)
         stratify_1 = [val for val in label_dict.values()]
-        stratify_2 = [1 for x in meta_file]
-        stratify = np.dstack(stratify_1, stratify_2)
+        stratify_2 = [x[stratifier] for x in meta_file]
+        stratify = np.dstack((stratify_1, stratify_2))
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
 
@@ -165,8 +164,8 @@ def do_train_split(
             stratify = [val for key, val in label_dict.items() if key in keys_train]
         elif strategy == 'class_plus_custom':
             stratify_1 = [val for key, val in label_dict.items() if key in keys_train]
-            stratify_2 = [1 for x in meta_file]
-            stratify = np.dstack(stratify_1, stratify_2)
+            stratify_2 = [x[stratifier] for x in meta_file if stratifier is not None]
+            stratify = np.dstack((stratify_1, stratify_2))
         keys_train, keys_val = train_test_split(
             keys_train,
             train_size=splits[0],

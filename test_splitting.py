@@ -30,6 +30,6 @@ train_keys, val_keys, test_keys = do_train_split(
     min_threshold=0.9,
     splits=(0.6, 0.1, 0.3),
     strategy='class_plus_custom',
-    stratifier='station',
+    stratifier='stratifier',
 )
 breakpoint()
