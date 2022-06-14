@@ -1,6 +1,7 @@
 """Classes for accessing data."""
 import os
 import random
+import re
 import shutil
 from math import ceil
 from typing import (
@@ -135,50 +136,72 @@ def do_train_split(
 
     if strategy == 'random':
         stratify = None
+
     elif strategy == 'class':
         stratify = [val for val in label_dict.values()]
+
     elif strategy == 'class_plus_custom':
         if meta_file_path is None or stratifier is None:
             raise ValueError(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
-        meta_dict = {key: value for key, value in load_csv(meta_file_path)}
-        stratify_1 = [val for val in label_dict.values()]
-        stratify_2 = [val for key, val in meta_dict.items() if key in label_dict.keys()]
-        stratify = np.dstack((stratify_1, stratify_2)).squeeze(0)
-        counts_1 = [(x, stratify_1.count(x)) for x in set(stratify_1)]
-        if stratify_2 is not None:
-            counts_2 = [
-                (x, stratify_2.count(x)) for x in set(stratify_2)
-            ]
-        print(f'{counts_1}, {counts_2}')
-        breakpoint()
+        meta_dict = {
+            key: value
+            for key, value in load_csv(meta_file_path)
+            if key in label_dict.keys()
+        }
+        stratify = np.dstack(
+            ([val for val in label_dict.values()], [val for val in meta_dict.values()])
+        ).squeeze(0)
+
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
 
-    keys_train, keys_test = train_test_split(
-        [k for k in label_dict.keys()],
-        train_size=splits[0] + splits[1],
-        test_size=splits[2],
-        random_state=random_state,
-        stratify=stratify,
+    stratification_warning = (
+        'Stratified sampling with sklearn is only supported for stratifying '
+        'variables with sufficient amount of counts per category. Try '
+        'grouping infrequent categories into larger ones.'
     )
-    keys_val = []
-
-    if splits[1] > 0:
-        if strategy == 'class':
-            stratify = [val for key, val in label_dict.items() if key in keys_train]
-        elif strategy == 'class_plus_custom':
-            stratify_1 = [val for key, val in label_dict.items() if key in keys_train]
-            stratify_2 = [val for key, val in meta_dict.items() if key in keys_train]
-            stratify = np.dstack((stratify_1, stratify_2)).squeeze(0)
-        keys_train, keys_val = train_test_split(
-            keys_train,
-            train_size=splits[0],
-            test_size=splits[1],
+    try:
+        keys_train, keys_test = train_test_split(
+            [k for k in label_dict.keys()],
+            train_size=splits[0] + splits[1],
+            test_size=splits[2],
             random_state=random_state,
             stratify=stratify,
         )
+        keys_val = []
+    except ValueError as e:
+        if bool(re.search('least populated class', str(e))):
+            print(stratification_warning)
+
+    if splits[1] > 0:
+
+        label_dict = {key: val for key, val in label_dict.items() if key in keys_train}
+        meta_dict = {key: val for key, val in meta_dict.items() if key in keys_train}
+
+        if strategy == 'class':
+            stratify = [val for val in label_dict.values()]
+
+        elif strategy == 'class_plus_custom':
+            stratify = np.dstack(
+                (
+                    [val for val in label_dict.values()],
+                    [val for val in meta_dict.values()],
+                )
+            ).squeeze(0)
+
+        try:
+            keys_train, keys_val = train_test_split(
+                keys_train,
+                train_size=splits[0],
+                test_size=splits[1],
+                random_state=random_state,
+                stratify=stratify,
+            )
+        except ValueError as e:
+            if bool(re.search('least populated class', str(e))):
+                print(print(stratification_warning))
 
     return keys_train, keys_val, keys_test
 
