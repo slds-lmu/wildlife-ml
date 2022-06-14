@@ -33,6 +33,6 @@ train_keys, val_keys, test_keys = do_train_split(
     meta_file_path='uc2_meta.csv',
     min_threshold=0.9,
     splits=(0.6, 0.1, 0.3),
-    strategy='random',
+    strategy='class',
 )
 breakpoint()
