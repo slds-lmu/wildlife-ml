@@ -112,6 +112,7 @@ def do_train_split(
     min_threshold: float = 0.0,
 ) -> Tuple[List[str], List[str], List[str]]:
     """Split a csv with labels in train & test data and filter with detector results."""
+    keys_train, keys_val, keys_test = [''], [''], ['']
     label_dict = {key: value for key, value in load_csv(label_file_path)}
 
     if detector_file_path is not None:
@@ -175,7 +176,7 @@ def do_train_split(
         if bool(re.search('least populated class', str(e))):
             print(stratification_warning)
 
-    if splits[1] > 0 and keys_train is not None:
+    if splits[1] > 0:
 
         label_dict = {key: val for key, val in label_dict.items() if key in keys_train}
         meta_dict = {key: val for key, val in meta_dict.items() if key in keys_train}
