@@ -19,6 +19,7 @@ from tqdm import tqdm
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.utils.io import (
     load_csv,
+    load_csv_dict,
     load_image,
     load_json,
     save_as_csv,
@@ -142,8 +143,8 @@ def do_train_split(
             raise ValueError(
                 f'Strategy "{strategy}" requires metadata and variable specification'
             )
-        meta_file = load_csv(meta_file_path)
         breakpoint()
+        meta_file = load_csv_dict(meta_file_path)
         stratify_1 = [val for val in label_dict.values()]
         stratify_2 = [1 for x in meta_file]
         stratify = np.dstack(stratify_1, stratify_2)

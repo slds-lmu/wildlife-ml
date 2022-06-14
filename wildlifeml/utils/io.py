@@ -32,7 +32,7 @@ def load_csv(file_path: str, ignore_header: bool = False) -> List[List[str]]:
         return [r for r in reader]
 
 
-def load_csv_long(file_path: str) -> List[Dict[str, str]]:
+def load_csv_dict(file_path: str) -> List[Dict[str, str]]:
     """Read a comma separated file with header information."""
     with open(file_path, 'r') as f:
         csv_reader = csv.DictReader(f, delimiter=',')
