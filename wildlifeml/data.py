@@ -161,9 +161,9 @@ def do_train_split(
 
     if splits[1] > 0:
         if strategy == 'class':
-            stratify = [val for key, val in label_dict.items() if key in new_keys]
+            stratify = [val for key, val in label_dict.items() if key in keys_train]
         elif strategy == 'class_plus_custom':
-            stratify_1 = [val for key, val in label_dict.items() if key in new_keys]
+            stratify_1 = [val for key, val in label_dict.items() if key in keys_train]
             stratify_2 = [1 for x in meta_file]
             stratify = np.dstack(stratify_1, stratify_2)
         keys_train, keys_val = train_test_split(
