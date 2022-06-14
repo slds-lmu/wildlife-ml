@@ -175,7 +175,7 @@ def do_train_split(
         if bool(re.search('least populated class', str(e))):
             print(stratification_warning)
 
-    if splits[1] > 0:
+    if splits[1] > 0 and keys_train is not None:
 
         label_dict = {key: val for key, val in label_dict.items() if key in keys_train}
         meta_dict = {key: val for key, val in meta_dict.items() if key in keys_train}
