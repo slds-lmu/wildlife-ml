@@ -18,7 +18,6 @@ if detect:
 
 label_file = load_csv_long(os.path.join(root, 'metadata/uc2_labels.csv'))
 label_dict = [{x['orig_name']: x['true_class']} for x in label_file]
-breakpoint()
 save_as_csv_dict(label_dict, 'uc2_labels_new.csv', header=['id', 'class'])
 
 meta_file = label_file
