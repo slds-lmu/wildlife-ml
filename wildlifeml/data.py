@@ -2,6 +2,7 @@
 import os
 import random
 import shutil
+from copy import deepcopy
 from math import ceil
 from random import Random
 from typing import (
@@ -66,6 +67,10 @@ class WildlifeDataset(Sequence):
         self.do_cropping = do_cropping
         self.cropper = Cropper(rectify=rectify, fill=fill)
 
+    def set_keys(self, keys: List[str]) -> None:
+        """Change keys in dataset after instantiation. HANDLE WITH CARE."""
+        self.keys = keys
+
     def _exec_shuffle(self) -> None:
         """Shuffle the dataset."""
         random.shuffle(self.keys)
@@ -114,6 +119,13 @@ class WildlifeDataset(Sequence):
             labels = np.zeros(shape=self.batch_size, dtype=float)
 
         return np.stack(imgs).astype(float), labels
+
+
+def clone_dataset(keys: List[str], dataset: WildlifeDataset) -> WildlifeDataset:
+    """Clone a WildlifeDataset object with a new set of keys."""
+    new_dataset = deepcopy(dataset)
+    new_dataset.set_keys(keys)
+    return new_dataset
 
 
 # --------------------------------------------------------------------------------------

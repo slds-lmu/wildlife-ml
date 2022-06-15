@@ -23,8 +23,13 @@ class BaseAcquisitor(ABC):
         """Return the top candidates for AL loop."""
         return self._run_acquisition(keys, predictions)
 
+    @abstractmethod
+    def __str__(self) -> str:
+        """Print object name."""
+        pass
+
     @staticmethod
-    def get_top_k_indices(x: np.ndarray, k: int = 1) -> np.array:
+    def get_top_k_indices(x: np.ndarray, k: int = 1) -> np.ndarray:
         """Return top k indices (or all, if x has fewer than k elements)."""
         assert len(x.shape) == 1
         m = min(k, x.shape[0])
@@ -38,6 +43,10 @@ class RandomAcquisitor(BaseAcquisitor):
         if self.random_state is not None:
             random.seed(self.random_state)
         return random.sample(keys, self.top_k)
+
+    def __str__(self):
+        """Print object name."""
+        return 'random'
 
 
 class AcquisitorFactory:

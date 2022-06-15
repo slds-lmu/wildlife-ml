@@ -5,6 +5,7 @@ from typing import List, Tuple
 from urllib import request
 
 import numpy as np
+from PIL import Image, ImageDraw
 
 
 def download_file(url: str, target_path: str) -> None:
@@ -53,3 +54,20 @@ def truncate_float(x: float, precision: int = 3) -> float:
         # Shift decimal point by multiplication with factor, flooring, and
         # division by factor
         return math.floor(x * factor) / factor
+
+
+def render_bbox(
+    img: Image,
+    x_coords: Tuple[int, int],
+    y_coords: Tuple[int, int],
+    outline: str = 'red',
+    border_width: int = 10,
+) -> Image:
+    """Render a bounding box into a PIL Image."""
+    img_draw = ImageDraw.Draw(img)
+    img_draw.rectangle(
+        xy=((x_coords[0], y_coords[0]), (x_coords[1], y_coords[1])),
+        outline=outline,
+        width=border_width,
+    )
+    return img
