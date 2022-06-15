@@ -136,3 +136,4 @@ data
 .data
 *.json
 dummy*
+upload.sh
