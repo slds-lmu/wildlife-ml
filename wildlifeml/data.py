@@ -114,6 +114,8 @@ def do_train_split(
     """Split a csv with labels in train & test data and filter with detector results."""
     label_dict = {key: value for key, value in load_csv(label_file_path)}
 
+    # Filter detector results for relevant detections
+
     if detector_file_path is not None:
         detector_dict = load_json(detector_file_path)
         print(
@@ -133,6 +135,8 @@ def do_train_split(
         label_dict = {
             key: label_dict[key] for key in label_dict.keys() if key in new_keys
         }
+
+    # Define stratification variable (none, class labels or class labels + custom)
 
     if strategy == 'random':
         stratify = None
@@ -157,6 +161,8 @@ def do_train_split(
     else:
         raise ValueError('"{}" is not a valid splitting strategy.'.format(strategy))
 
+    # Make stratified split and throw error if stratification variable lacks support
+
     keys_train, keys_val, keys_test = [], [], []
 
     stratification_warning = (
@@ -177,15 +183,19 @@ def do_train_split(
         if bool(re.search('least populated class', str(e))):
             raise ValueError(stratification_warning)
 
+    # Reiterate process to split keys_train in train and val if required
+
     if splits[1] > 0:
 
         label_dict = {key: val for key, val in label_dict.items() if key in keys_train}
-        meta_dict = {key: val for key, val in meta_dict.items() if key in keys_train}
 
         if strategy == 'class':
             stratify = [val for val in label_dict.values()]
 
         elif strategy == 'class_plus_custom':
+            meta_dict = {
+                key: val for key, val in meta_dict.items() if key in keys_train
+            }
             stratify = np.dstack(
                 (
                     [val for val in label_dict.values()],
