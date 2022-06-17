@@ -33,6 +33,7 @@ class WildlifeDataset(Sequence):
     def __init__(
         self,
         keys: List[str],
+        image_dir: str,
         detector_file_path: str,
         batch_size: int,
         label_file_path: Optional[str] = None,
@@ -45,6 +46,7 @@ class WildlifeDataset(Sequence):
     ) -> None:
         """Initialize a WildlifeDataset object."""
         self.keys = keys
+        self.img_dir = image_dir
 
         if label_file_path is not None:
             self.is_supervised = True
@@ -94,7 +96,8 @@ class WildlifeDataset(Sequence):
         imgs = []
         for key in batch_keys:
             entry = self.detector_dict[key]
-            img = np.asarray(load_image(entry['file']))
+            img_path = os.path.join(self.img_dir, key)
+            img = np.asarray(load_image(img_path))
 
             # Crop according to bounding box if applicable
             if self.do_cropping and len(entry['detections']) > 0:
@@ -116,7 +119,7 @@ class WildlifeDataset(Sequence):
             labels = np.asarray([self.label_dict[key] for key in batch_keys])
         else:
             # We need to add a dummy for unsupervised case because TF.
-            labels = np.zeros(shape=self.batch_size, dtype=float)
+            labels = np.empty(shape=self.batch_size, dtype=float)
 
         return np.stack(imgs).astype(float), labels
 

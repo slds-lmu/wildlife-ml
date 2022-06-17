@@ -27,18 +27,18 @@ class ActiveLearner:
     def __init__(
         self,
         target_dataset: WildlifeDataset,
-        image_directory: str,
         al_batch_size: int = 10,
         active_directory: str = 'active-wildlife',
         acquisitor_name: str = 'random',
         start_fresh: bool = True,
+        start_keys: List[str] = None,
         eval_dataset: Optional[WildlifeDataset] = None,
         state_cache: str = '.activecache.json',
         random_state: Optional[int] = None,
     ) -> None:
         """Instantiate an ActiveLearner object."""
         self.target_dataset = target_dataset
-        self.img_dir = image_directory
+        self.img_dir = self.target_dataset.img_dir
         self.act_dir = active_directory
 
         self.acquisitor = AcquisitorFactory.get(
@@ -50,9 +50,12 @@ class ActiveLearner:
 
         self.state_cache_file = state_cache
         self.do_fresh_start = start_fresh
+        self.start_keys = start_keys
 
         # Serves as storage for all active keys and labels.
         self.active_labels: Dict[str, float] = {}
+        # Count active learning iterations
+        self.active_counter = 1
 
     def run(self) -> None:
         """Trigger Active Learning process."""
@@ -76,6 +79,12 @@ class ActiveLearner:
         self.fit()
 
         # ------------------------------------------------------------------------------
+        # EVALUATE MODEL
+        # ------------------------------------------------------------------------------
+        if self.eval_dataset is not None:
+            self.evaluate()
+
+        # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
         candidate_keys = self.target_dataset.keys
@@ -84,6 +93,7 @@ class ActiveLearner:
         staging_keys = self.acquisitor(candidate_keys, preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
+        self.active_counter += 1
 
     def initialize(self) -> None:
         """Initialize AL run as fresh start."""
@@ -102,29 +112,34 @@ class ActiveLearner:
         os.makedirs(self.act_dir, exist_ok=True)
         os.makedirs(os.path.join(self.act_dir, 'images'), exist_ok=True)
 
-        print(
-            'For this fresh start, {} images are randomly chosen from your unlabeled '
-            'dataset.'.format(self.al_batch_size)
-        )
-        all_keys = self.target_dataset.keys
-        if self.random_state is not None:
-            random.seed(self.random_state)
-        staging_keys = random.sample(all_keys, self.al_batch_size)
+        if self.start_keys is None:
+            print(
+                'For this fresh start, {} images are randomly chosen '
+                'from your unlabeled dataset.'.format(self.al_batch_size)
+            )
+            all_keys = self.target_dataset.keys
+            if self.random_state is not None:
+                random.seed(self.random_state)
+            staging_keys = random.sample(all_keys, self.al_batch_size)
+        else:
+            staging_keys = self.start_keys
 
         # Move initial data and exit.
         self.fill_active_stage(staging_keys)
         self.save_state()
+        self.active_counter += 1
 
     def load_state(self) -> None:
         """Initialize active learner from state file."""
         try:
             state = load_json(self.state_cache_file)
 
-            self.img_dir = state['image_directory']
+            self.img_dir = self.target_dataset.img_dir
             self.al_batch_size = state['al_batch_size']
             self.act_dir = state['active_directory']
             self.random_state = state['random_state']
-            self.active_keys = state['active_keys']
+            self.active_labels = state['active_labels']
+            self.active_counter = state['active_counter']
 
             self.acquisitor = AcquisitorFactory.get(
                 state['acquisitor_name'],
@@ -146,7 +161,8 @@ class ActiveLearner:
             'active_directory': self.act_dir,
             'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
-            'active_keys': self.active_keys,
+            'active_labels': self.active_labels,
+            'active_counter': self.active_counter,
         }
         save_as_json(state, self.state_cache_file)
 
@@ -179,7 +195,7 @@ class ActiveLearner:
 
         print(
             'A selection of images is now waiting in "{}" for your labeling '
-            'expertise!\nRerun the program, when you are done'.format(self.act_dir)
+            'expertise!\nRerun the program, when you are done.'.format(self.act_dir)
         )
 
     def collect(self) -> None:
@@ -193,6 +209,10 @@ class ActiveLearner:
 
     def fit(self) -> None:
         """Fit the model with active data."""
+        pass
+
+    def evaluate(self) -> None:
+        """Evaluate the model on the eval dataset."""
         pass
 
     def predict(self, keys: List[str]) -> np.ndarray:
