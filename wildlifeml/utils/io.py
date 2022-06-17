@@ -3,6 +3,7 @@ import csv
 import json
 from typing import (
     Any,
+    Collection,
     Dict,
     List,
     Optional,
@@ -31,6 +32,13 @@ def load_csv(file_path: str, ignore_header: bool = False) -> List[List[str]]:
         return [r for r in reader]
 
 
+def load_csv_dict(file_path: str) -> List[Dict[str, str]]:
+    """Read a comma separated file with header information."""
+    with open(file_path, 'r') as f:
+        csv_reader = csv.DictReader(f, delimiter=',')
+        return [r for r in csv_reader]
+
+
 def save_as_json(dictionary: Any, target: str) -> None:
     """Save a python object as JSON file."""
     with open(target, 'w', encoding='utf-8') as f:
@@ -45,4 +53,14 @@ def save_as_csv(rows: List, target: str, header: Optional[List] = None) -> None:
         if header is not None:
             writer.writerow(header)
 
+        writer.writerows(rows)
+
+
+def save_as_csv_dict(
+    rows: List[Dict[str, str]], target: str, header: Collection
+) -> None:
+    """Save a list of rows to a csv file."""
+    with open(target, 'w', encoding='UTF8', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
         writer.writerows(rows)
