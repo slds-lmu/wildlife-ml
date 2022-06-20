@@ -6,5 +6,6 @@ matplotlib
 numpy
 pillow
 pre-commit
+scikit-learn
 tensorflow
 tqdm

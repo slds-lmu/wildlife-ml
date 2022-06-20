@@ -16,6 +16,8 @@ from typing import (
 import albumentations as A
 import numpy as np
 from sklearn.model_selection import train_test_split
+from tensorflow.image import resize
+from tensorflow.keras import Sequential
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
@@ -44,8 +46,8 @@ class WildlifeDataset(Sequence):
         resolution: int = 224,
         augmentation: Optional[A.Compose] = None,
         do_cropping: bool = True,
-        rectify: bool = True,
-        fill: bool = True,
+        rescale_bbox: bool = True,
+        pad: bool = True,
     ) -> None:
         """Initialize a WildlifeDataset object."""
         self.keys = keys
@@ -70,7 +72,7 @@ class WildlifeDataset(Sequence):
         self.target_resolution = resolution
         self.augmentation = augmentation
         self.do_cropping = do_cropping
-        self.cropper = Cropper(rectify=rectify, fill=fill)
+        self.cropper = Cropper(rescale_bbox=rescale_bbox, pad=pad)
 
     def set_keys(self, keys: List[str]) -> None:
         """Change keys in dataset after instantiation. HANDLE WITH CARE."""
@@ -206,7 +208,7 @@ def do_train_split(
 
     return keys_train, keys_val, keys_test
 
-
+  
 def get_stratifier(
     strategy: str,
     label_dict: Dict,

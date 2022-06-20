@@ -7,10 +7,10 @@ import numpy as np
 class Cropper:
     """Cropping module for extracting the content of bounding boxes."""
 
-    def __init__(self, rectify: bool = True, fill: bool = True) -> None:
+    def __init__(self, rescale_bbox: bool = True, pad: bool = True) -> None:
         """Initialize Cropper object."""
-        self.rectify = rectify
-        self.fill = fill
+        self.rescale = rescale_bbox
+        self.pad = pad
 
     def crop(
         self, img: np.ndarray, bbox: Tuple[float, float, float, float]
@@ -21,25 +21,24 @@ class Cropper:
         # Convert the relative coords from megadetector output to absolute indices.
         x_coords, y_coords = Cropper.get_absolute_coords(bbox, dims=(height, width))
 
-        if self.rectify:
+        if self.rescale:
             # Correct bounding box for rectangular network input
-            x_coords, y_coords = Cropper.rectify_bbox(
+            x_coords, y_coords = Cropper.rescale_bbox(
                 x_coords, y_coords, dims=(height, width)
             )
 
-        if self.fill:
+        if self.pad:
             # Ensures a square as output, but could contain black borders
             x_length = x_coords[1] - x_coords[0]
             y_length = y_coords[1] - y_coords[0]
             edge_length = max(x_length, y_length)
-            cropped_img = np.zeros((edge_length, edge_length, 3), dtype=img.dtype)
-            # Sorry for spaghet
-            cropped_img[:y_length, :x_length] = img[
-                y_coords[0] : y_coords[1], x_coords[0] : x_coords[1]
-            ]
+            cropped_img = np.pad(
+                img[y_coords[0]: y_coords[1], x_coords[0]: x_coords[1]],
+                [(0, edge_length - y_length), (0, edge_length - x_length), (0, 0)],
+            )
             return cropped_img
 
-        return img[y_coords[0] : y_coords[1] + 1, x_coords[0] : x_coords[1] + 1]
+        return img[y_coords[0]: y_coords[1] + 1, x_coords[0]: x_coords[1] + 1]
 
     @staticmethod
     def get_absolute_coords(
@@ -56,29 +55,31 @@ class Cropper:
         return (x_start, x_end), (y_start, y_end)
 
     @staticmethod
-    def rectify_bbox(
+    def rescale_bbox(
         x_coords: Tuple[int, int], y_coords: Tuple[int, int], dims: Tuple[int, int]
     ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         """
-        Rectify bounding box.
+        Adjust bounding box to be square if possible.
 
         For maintaining the aspect ratio in the subsequent resizing process,
         the bounding box is rescaled. The longest edge serves as base.
-        Note: In very weird aspect ratios and large bounding boxes, this could result
+        Note: with extreme aspect ratios and large bounding boxes, this could result
         in non-quadratic bbox outputs!
         """
         height, width = dims
 
-        x_length = x_coords[1] - x_coords[0]
-        y_length = y_coords[1] - y_coords[0]
+        x_length = (x_coords[1] - x_coords[0])
+        y_length = (y_coords[1] - y_coords[0])
+        diff_xy = x_length - y_length
+        half_diff = 0.5 * abs(diff_xy)
 
-        if x_length > y_length:
-            new_y_end = min(y_coords[0] + x_length, height - 1)
-            new_y_start = max(new_y_end - x_length, 0)
-            y_coords = (new_y_start, new_y_end)
-        else:
-            new_x_end = min(x_coords[0] + y_length, width - 1)
-            new_x_start = max(new_x_end - y_length, 0)
-            x_coords = (new_x_start, new_x_end)
+        if diff_xy > 0:
+            y_start = max(y_coords[0] - np.ceil(half_diff), 0)
+            y_end = min(y_coords[1] + np.floor(half_diff), height - 1)
+            y_coords = (int(y_start), int(y_end))
+        elif diff_xy < 0:
+            x_start = max(x_coords[0] - np.ceil(half_diff), 0)
+            x_end = min(x_coords[1] + np.floor(half_diff), width - 1)
+            x_coords = (int(x_start), int(x_end))
 
         return x_coords, y_coords
