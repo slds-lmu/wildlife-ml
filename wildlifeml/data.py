@@ -16,8 +16,6 @@ from typing import (
 import albumentations as A
 import numpy as np
 from sklearn.model_selection import train_test_split
-from tensorflow.image import resize
-from tensorflow.keras import Sequential
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
@@ -129,10 +127,39 @@ class WildlifeDataset(Sequence):
         return np.stack(imgs).astype(float), labels
 
 
-def clone_dataset(keys: List[str], dataset: WildlifeDataset) -> WildlifeDataset:
+def update_dataset(
+    dataset: WildlifeDataset,
+    keys: Optional[List[str]] = None,
+    new_label_dict: Optional[Dict] = None,
+) -> WildlifeDataset:
     """Clone a WildlifeDataset object with a new set of keys."""
     new_dataset = deepcopy(dataset)
-    new_dataset.set_keys(keys)
+
+    if new_label_dict is not None:
+        new_keys = list(new_label_dict.keys())
+        if (
+            keys is not None
+            and len(set.symmetric_difference(set(keys), set(new_keys))) > 0
+        ):
+            raise ValueError(
+                'Supplied "keys" and "new_label_dict" implying different sets of keys'
+            )
+        new_dataset.set_keys(new_dataset.keys + new_keys)
+        new_dataset.label_dict.update(new_label_dict)
+
+    elif keys is not None:
+        n_new_keys = len(set.difference(set(keys), set(dataset.keys)))
+        if n_new_keys > 0:
+            raise ValueError(
+                'Expanding a dataset requires providing labels for all additional keys'
+            )
+        new_dataset.set_keys(keys)
+
+    else:
+        raise ValueError(
+            'Either set of keys or dictionary with new keys and labels must be provided'
+        )
+
     return new_dataset
 
 
@@ -153,20 +180,10 @@ def do_train_split(
 
     # Filter detector results for relevant detections
     if detector_file_path is not None:
-        detector_dict = load_json(detector_file_path)
-        print(
-            'Filtering images with no detected object '
-            'and not satisfying minimum threshold.'
-        )
-        new_keys = [
-            key
-            for key, val in detector_dict.items()
-            if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
-        ]
-        print(
-            'Filtered out {} elements. Current dataset size is {}.'.format(
-                len(label_dict) - len(new_keys), len(new_keys)
-            )
+        new_keys = filter_detector_keys(
+            label_file_path=label_file_path,
+            detector_file_path=detector_file_path,
+            min_threshold=min_threshold,
         )
         label_dict = {
             key: label_dict[key] for key in label_dict.keys() if key in new_keys
@@ -208,7 +225,34 @@ def do_train_split(
 
     return keys_train, keys_val, keys_test
 
-  
+
+def filter_detector_keys(
+    label_file_path: str,
+    detector_file_path: str,
+    min_threshold: float = 0.0,
+) -> List[str]:
+    """Get keys from directory and filter with detector results."""
+    label_dict = {key: value for key, value in load_csv(label_file_path)}
+
+    # Filter detector results for relevant detections
+    detector_dict = load_json(detector_file_path)
+    print(
+        'Filtering images with no detected object '
+        'and not satisfying minimum threshold.'
+    )
+    new_keys = [
+        key
+        for key, val in detector_dict.items()
+        if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
+    ]
+    print(
+        f'Filtered out {len(label_dict) - len(new_keys)} elements. '
+        f'Current dataset size is {len(new_keys)}.'
+    )
+
+    return new_keys
+
+
 def get_stratifier(
     strategy: str,
     label_dict: Dict,
@@ -323,7 +367,7 @@ class DatasetConverter:
         label_list = []
 
         for cls in (pbar := tqdm(class_dirs)):
-            pbar.set_description('Processing {}'.format(cls))
+            pbar.set_description(f'Processing {cls}')
 
             orig_root = os.path.join(self.root_dir, cls)
             label = label_map[cls]

@@ -48,7 +48,7 @@ class WildlifeTrainer:
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-    def fit(self, train_dataset: Sequence, test_dataset: Sequence) -> Model:
+    def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""
         if self.transfer_epochs > 0:
             print('---> Compiling model')
@@ -64,7 +64,7 @@ class WildlifeTrainer:
 
             self.model.fit(
                 x=train_dataset,
-                validation_data=test_dataset,
+                validation_data=val_dataset,
                 batch_size=self.batch_size,
                 epochs=self.transfer_epochs,
                 callbacks=self.transfer_callbacks,
@@ -73,7 +73,7 @@ class WildlifeTrainer:
             )
 
         if self.finetune_epochs > 0:
-            print('---> Unfreezing last {} layers'.format(self.finetune_layers))
+            print(f'---> Unfreezing last {self.finetune_layers} layers')
             for layer in self.model.layers[: -self.finetune_layers]:
                 layer.trainable = False
             for layer in self.model.layers[-self.finetune_layers :]:
@@ -89,7 +89,7 @@ class WildlifeTrainer:
             print('---> Starting fine tuning')
             self.model.fit(
                 x=train_dataset,
-                validation_data=test_dataset,
+                validation_data=val_dataset,
                 batch_size=self.batch_size,
                 epochs=self.finetune_epochs,
                 callbacks=self.finetune_callbacks,

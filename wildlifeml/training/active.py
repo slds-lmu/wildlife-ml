@@ -9,10 +9,16 @@ from typing import (
 
 import numpy as np
 
-from wildlifeml.data import WildlifeDataset
+from wildlifeml import WildlifeTrainer
+from wildlifeml.data import (
+    WildlifeDataset,
+    do_train_split,
+    update_dataset,
+)
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
 from wildlifeml.utils.io import (
+    load_csv,
     load_image,
     load_json,
     save_as_csv,
@@ -26,25 +32,37 @@ class ActiveLearner:
 
     def __init__(
         self,
-        target_dataset: WildlifeDataset,
+        trainer: WildlifeTrainer,
+        train_dataset: WildlifeDataset,
+        val_dataset: WildlifeDataset,
+        pool_dataset: WildlifeDataset,
         al_batch_size: int = 10,
         active_directory: str = 'active-wildlife',
         acquisitor_name: str = 'random',
         start_fresh: bool = True,
         start_keys: List[str] = None,
-        eval_dataset: Optional[WildlifeDataset] = None,
+        test_dataset: Optional[WildlifeDataset] = None,
         state_cache: str = '.activecache.json',
         random_state: Optional[int] = None,
     ) -> None:
         """Instantiate an ActiveLearner object."""
-        self.target_dataset = target_dataset
-        self.img_dir = self.target_dataset.img_dir
+        self.pool_dataset = pool_dataset
+        self.img_dir = self.pool_dataset.img_dir
         self.act_dir = active_directory
+
+        self.trainer = trainer
+        # Save initial trainer state with which to begin each iteration
+        self.model_dir = os.path.join(active_directory, 'models')
+        os.makedirs(self.model_dir, exist_ok=True)
+        trainer.save_model(os.path.join(self.model_dir, 'untrained_model.h5'))
+
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
 
         self.acquisitor = AcquisitorFactory.get(
             acquisitor_name, top_k=al_batch_size, random_state=random_state
         )
-        self.eval_dataset = eval_dataset
+        self.test_dataset = test_dataset
         self.al_batch_size = al_batch_size
         self.random_state = random_state
 
@@ -81,13 +99,13 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         # EVALUATE MODEL
         # ------------------------------------------------------------------------------
-        if self.eval_dataset is not None:
+        if self.test_dataset is not None:
             self.evaluate()
 
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
-        candidate_keys = self.target_dataset.keys
+        candidate_keys = self.pool_dataset.keys
         # TODO: Filter self.active_labels from full target dataset.
         preds = self.predict(candidate_keys)
         staging_keys = self.acquisitor(candidate_keys, preds)
@@ -99,10 +117,9 @@ class ActiveLearner:
         """Initialize AL run as fresh start."""
         if os.path.exists(self.state_cache_file):
             print(
-                '---> Found active learning state {}, but you also specified to '
-                'start a new Active Learning run. The file will be deleted and your '
-                'progress is lost.',
-                format(self.state_cache_file),
+                f'---> Found active learning state {self.state_cache_file}, '
+                f'but you also specified to start a new active learning run. '
+                f'The file will be deleted and your progress will be lost.'
             )
             print('Do you want to continue? [y / n]')
             if 'y' not in input().lower():
@@ -114,10 +131,10 @@ class ActiveLearner:
 
         if self.start_keys is None:
             print(
-                'For this fresh start, {} images are randomly chosen '
-                'from your unlabeled dataset.'.format(self.al_batch_size)
+                f'For this fresh start, {self.al_batch_size} images are randomly '
+                f'chosen from your unlabeled dataset.'
             )
-            all_keys = self.target_dataset.keys
+            all_keys = self.pool_dataset.keys
             if self.random_state is not None:
                 random.seed(self.random_state)
             staging_keys = random.sample(all_keys, self.al_batch_size)
@@ -134,7 +151,7 @@ class ActiveLearner:
         try:
             state = load_json(self.state_cache_file)
 
-            self.img_dir = self.target_dataset.img_dir
+            self.img_dir = self.pool_dataset.img_dir
             self.al_batch_size = state['al_batch_size']
             self.act_dir = state['active_directory']
             self.random_state = state['random_state']
@@ -177,7 +194,7 @@ class ActiveLearner:
         target_path = os.path.join(self.act_dir, 'images')
 
         for key in keys:
-            entry = self.target_dataset.detector_dict[key]
+            entry = self.pool_dataset.detector_dict[key]
             img = load_image(entry['file'])
             width, height = img.size
 
@@ -194,8 +211,8 @@ class ActiveLearner:
         )
 
         print(
-            'A selection of images is now waiting in "{}" for your labeling '
-            'expertise!\nRerun the program, when you are done.'.format(self.act_dir)
+            f'A selection of images is now waiting in "{self.act_dir}" for your '
+            f'labeling expertise!\nRerun the program when you are done.'
         )
 
     def collect(self) -> None:
@@ -205,11 +222,63 @@ class ActiveLearner:
         The function checks if the active labels were filled in correctly and
         completely. If collecting labels was successful, the staging area is wiped.
         """
-        pass
+        try:
+            labels_supplied = {
+                key: value
+                for key, value in load_csv(
+                    os.path.join(self.act_dir, 'active_labels.csv')
+                )
+            }
+        except IOError:
+            'There is a problem with your label file.'
+            'Make sure you have supplied a label for every entry.'
+
+        # Check whether label type is valid
+        set_labels_supplied = set(labels_supplied.values())
+        if not all([isinstance(item, str) for item in set_labels_supplied]):
+            raise ValueError('Supplied labels must be of type "integer".')
+        set_labels_train = set(self.train_dataset.label_dict.values())
+        unknown_labels = set.difference(set_labels_supplied, set_labels_train)
+        if len(unknown_labels) > 0:
+            print(
+                f'Please note: Your supplied labels contain classes "{unknown_labels}" '
+                f'which have so far not been part of the training data.'
+            )
+
+        # Update datasets
+        # TODO think about stratification here (at least by class)
+        n_t = len(self.train_dataset)
+        n_v = len(self.val_dataset)
+        train_keys, _, val_keys = do_train_split(
+            label_file_path=os.path.join(self.act_dir, 'active_labels.csv'),
+            splits=(n_t / (n_t + n_v), 0, n_v / (n_t + n_v)),
+            strategy='random',
+            random_state=self.random_state,
+        )
+        self.train_dataset = update_dataset(
+            dataset=self.train_dataset,
+            new_label_dict={
+                k: v for k, v in labels_supplied.items() if k in train_keys
+            },
+        )
+        self.val_dataset = update_dataset(
+            dataset=self.train_dataset,
+            new_label_dict={k: v for k, v in labels_supplied.items() if k in val_keys},
+        )
+        self.pool_dataset = update_dataset(
+            dataset=self.pool_dataset,
+            keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
+        )
+
+        # Wipe staging area
+        for f in os.listdir(os.path.join(self.act_dir, 'images')):
+            os.remove(os.path.join(self.act_dir, 'images', f))
+        os.remove(os.path.join(self.act_dir, 'active_labels.csv'))
 
     def fit(self) -> None:
         """Fit the model with active data."""
-        pass
+        self.trainer.load_model(os.path.join(self.model_dir, 'untrained_model.h5'))
+        # TODO: fit trainer
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
