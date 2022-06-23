@@ -9,7 +9,6 @@ from typing import (
 
 import numpy as np
 
-from wildlifeml import WildlifeTrainer
 from wildlifeml.data import (
     WildlifeDataset,
     do_train_split,
@@ -17,6 +16,7 @@ from wildlifeml.data import (
 )
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
+from wildlifeml.training.trainer import WildlifeTrainer
 from wildlifeml.utils.io import (
     load_csv,
     load_image,

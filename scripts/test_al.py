@@ -9,16 +9,13 @@ import albumentations as A
 import click
 from tensorflow import keras
 
-from wildlifeml import (
-    ActiveLearner,
-    MegaDetector,
-    WildlifeTrainer,
-)
+from wildlifeml import ActiveLearner, MegaDetector
 from wildlifeml.data import (
     WildlifeDataset,
     do_train_split,
     filter_detector_keys,
 )
+from wildlifeml.training.trainer import WildlifeTrainer
 
 # Dictionary containing desired params
 CFG: Final[Dict] = {
@@ -57,9 +54,6 @@ CFG: Final[Dict] = {
 @click.option(
     '--directory_pool', '-dp', help='Directory with pool images.', required=True
 )
-@click.option(  # only for experiments without human oracle
-    '--label_file_pool', '-lfp', help='Path to a csv with pool labels.', required=True
-)
 @click.option('--detector_file_pool', '-dfp', help='Path to pool Megadetector .json')
 @click.option(
     '--run_detector_pool',
@@ -74,7 +68,6 @@ def main(
     label_file_train: str,
     detector_file_train: Optional[str],
     directory_pool: str,
-    label_file_pool: str,
     detector_file_pool: Optional[str],
     directory_active: str,
     run_detector_train: bool = False,
@@ -135,7 +128,6 @@ def main(
     )
     # Get keys of pool data above detection threshold
     pool_keys = filter_detector_keys(
-        label_file_path=label_file_pool,
         detector_file_path=detector_file_pool,
         min_threshold=0.9,
     )
@@ -189,7 +181,6 @@ def main(
     pool_dataset = WildlifeDataset(
         keys=pool_keys,
         image_dir=directory_pool,
-        label_file_path=label_file_pool,
         detector_file_path=detector_file_pool,
         batch_size=CFG['batch_size'],
         resolution=CFG['target_resolution'],

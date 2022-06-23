@@ -181,7 +181,6 @@ def do_train_split(
     # Filter detector results for relevant detections
     if detector_file_path is not None:
         new_keys = filter_detector_keys(
-            label_file_path=label_file_path,
             detector_file_path=detector_file_path,
             min_threshold=min_threshold,
         )
@@ -227,13 +226,10 @@ def do_train_split(
 
 
 def filter_detector_keys(
-    label_file_path: str,
     detector_file_path: str,
     min_threshold: float = 0.0,
 ) -> List[str]:
     """Get keys from directory and filter with detector results."""
-    label_dict = {key: value for key, value in load_csv(label_file_path)}
-
     # Filter detector results for relevant detections
     detector_dict = load_json(detector_file_path)
     print(
@@ -246,7 +242,7 @@ def filter_detector_keys(
         if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
     ]
     print(
-        f'Filtered out {len(label_dict) - len(new_keys)} elements. '
+        f'Filtered out {len(detector_dict.keys()) - len(new_keys)} elements. '
         f'Current dataset size is {len(new_keys)}.'
     )
 
