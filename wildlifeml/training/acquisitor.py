@@ -1,7 +1,11 @@
 """Acquisitor classes for Active Learning."""
 import random
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import (
+    Dict,
+    List,
+    Optional,
+)
 
 import numpy as np
 
@@ -15,13 +19,13 @@ class BaseAcquisitor(ABC):
         self.random_state = random_state
 
     @abstractmethod
-    def _run_acquisition(self, keys: List[str], predictions: np.ndarray) -> List[str]:
+    def _run_acquisition(self, predictions: Dict[str, float]) -> List[str]:
         """Return the top candidates for AL loop."""
         pass
 
-    def __call__(self, keys: List[str], predictions: np.ndarray) -> List[str]:
+    def __call__(self, predictions: Dict[str, float]) -> List[str]:
         """Return the top candidates for AL loop."""
-        return self._run_acquisition(keys, predictions)
+        return self._run_acquisition(predictions)
 
     @abstractmethod
     def __str__(self) -> str:
@@ -29,6 +33,7 @@ class BaseAcquisitor(ABC):
         pass
 
     @staticmethod
+    # TODO rewrite for lists of keys
     def get_top_k_indices(x: np.ndarray, k: int = 1) -> np.ndarray:
         """Return top k indices (or all, if x has fewer than k elements)."""
         assert len(x.shape) == 1
@@ -39,10 +44,10 @@ class BaseAcquisitor(ABC):
 class RandomAcquisitor(BaseAcquisitor):
     """Random acquisition."""
 
-    def _run_acquisition(self, keys: List[str], predictions: np.ndarray) -> List[str]:
+    def _run_acquisition(self, predictions: Dict[str, float]) -> List[str]:
         if self.random_state is not None:
             random.seed(self.random_state)
-        return random.sample(keys, self.top_k)
+        return random.sample(list(predictions.keys()), self.top_k)
 
     def __str__(self):
         """Print object name."""

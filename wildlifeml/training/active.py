@@ -7,12 +7,11 @@ from typing import (
     Optional,
 )
 
-import numpy as np
-
 from wildlifeml.data import (
     WildlifeDataset,
+    append_dataset,
     do_train_split,
-    update_dataset,
+    subset_dataset,
 )
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
@@ -36,6 +35,7 @@ class ActiveLearner:
         train_dataset: WildlifeDataset,
         val_dataset: WildlifeDataset,
         pool_dataset: WildlifeDataset,
+        label_file_path: str,
         al_batch_size: int = 10,
         active_directory: str = 'active-wildlife',
         acquisitor_name: str = 'random',
@@ -47,17 +47,14 @@ class ActiveLearner:
     ) -> None:
         """Instantiate an ActiveLearner object."""
         self.pool_dataset = pool_dataset
-        self.img_dir = self.pool_dataset.img_dir
-        self.act_dir = active_directory
+        self.dir_img = self.pool_dataset.img_dir
+        self.dir_act = active_directory
 
         self.trainer = trainer
-        # Save initial trainer state with which to begin each iteration
-        self.model_dir = os.path.join(active_directory, 'models')
-        os.makedirs(self.model_dir, exist_ok=True)
-        trainer.save_model(os.path.join(self.model_dir, 'untrained_model.h5'))
 
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
+        self.label_file_path = label_file_path
 
         self.acquisitor = AcquisitorFactory.get(
             acquisitor_name, top_k=al_batch_size, random_state=random_state
@@ -105,10 +102,9 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
-        candidate_keys = self.pool_dataset.keys
         # TODO: Filter self.active_labels from full target dataset.
-        preds = self.predict(candidate_keys)
-        staging_keys = self.acquisitor(candidate_keys, preds)
+        preds = self.predict(self.pool_dataset)
+        staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
         self.active_counter += 1
@@ -126,8 +122,8 @@ class ActiveLearner:
                 print('Active Learning setup is aborted.')
                 exit()
 
-        os.makedirs(self.act_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.act_dir, 'images'), exist_ok=True)
+        os.makedirs(self.dir_act, exist_ok=True)
+        os.makedirs(os.path.join(self.dir_act, 'images'), exist_ok=True)
 
         if self.start_keys is None:
             print(
@@ -151,9 +147,9 @@ class ActiveLearner:
         try:
             state = load_json(self.state_cache_file)
 
-            self.img_dir = self.pool_dataset.img_dir
+            self.dir_img = self.pool_dataset.img_dir
             self.al_batch_size = state['al_batch_size']
-            self.act_dir = state['active_directory']
+            self.dir_act = state['active_directory']
             self.random_state = state['random_state']
             self.active_labels = state['active_labels']
             self.active_counter = state['active_counter']
@@ -173,9 +169,9 @@ class ActiveLearner:
     def save_state(self) -> None:
         """Save active learner state file in a file."""
         state = {
-            'image_directory': self.img_dir,
+            'image_directory': self.dir_img,
             'al_batch_size': self.al_batch_size,
-            'active_directory': self.act_dir,
+            'active_directory': self.dir_act,
             'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
             'active_labels': self.active_labels,
@@ -191,7 +187,7 @@ class ActiveLearner:
         directory, ready for human labeling. The images are located in the directory
         `images` and the `active_labels.csv` contains a template for adding labels.
         """
-        target_path = os.path.join(self.act_dir, 'images')
+        target_path = os.path.join(self.dir_act, 'images')
 
         for key in keys:
             entry = self.pool_dataset.detector_dict[key]
@@ -207,11 +203,11 @@ class ActiveLearner:
 
         label_template = [(key, '') for key in keys]
         save_as_csv(
-            rows=label_template, target=os.path.join(self.act_dir, 'active_labels.csv')
+            rows=label_template, target=os.path.join(self.dir_act, 'active_labels.csv')
         )
 
         print(
-            f'A selection of images is now waiting in "{self.act_dir}" for your '
+            f'A selection of images is now waiting in "{self.dir_act}" for your '
             f'labeling expertise!\nRerun the program when you are done.'
         )
 
@@ -222,21 +218,22 @@ class ActiveLearner:
         The function checks if the active labels were filled in correctly and
         completely. If collecting labels was successful, the staging area is wiped.
         """
+        labels_supplied = {}
         try:
-            labels_supplied = {
-                key: value
-                for key, value in load_csv(
-                    os.path.join(self.act_dir, 'active_labels.csv')
-                )
-            }
+            labels_supplied.update(
+                {
+                    key: float(value)
+                    for key, value in load_csv(
+                        os.path.join(self.dir_act, 'active_labels.csv')
+                    )
+                }
+            )
         except IOError:
             'There is a problem with your label file.'
             'Make sure you have supplied a label for every entry.'
 
         # Check whether label type is valid
         set_labels_supplied = set(labels_supplied.values())
-        if not all([isinstance(item, str) for item in set_labels_supplied]):
-            raise ValueError('Supplied labels must be of type "integer".')
         set_labels_train = set(self.train_dataset.label_dict.values())
         unknown_labels = set.difference(set_labels_supplied, set_labels_train)
         if len(unknown_labels) > 0:
@@ -245,45 +242,55 @@ class ActiveLearner:
                 f'which have so far not been part of the training data.'
             )
 
-        # Update datasets
+        # Update datasets (add new instances to train and validation data in constant
+        # proportion; remove them from pool dataset)
         # TODO think about stratification here (at least by class)
-        n_t = len(self.train_dataset)
-        n_v = len(self.val_dataset)
+        n_t = len(self.train_dataset.keys)
+        n_v = len(self.val_dataset.keys)
         train_keys, _, val_keys = do_train_split(
-            label_file_path=os.path.join(self.act_dir, 'active_labels.csv'),
+            label_file_path=os.path.join(self.dir_act, 'active_labels.csv'),
             splits=(n_t / (n_t + n_v), 0, n_v / (n_t + n_v)),
             strategy='random',
             random_state=self.random_state,
         )
-        self.train_dataset = update_dataset(
+        self.train_dataset = append_dataset(
             dataset=self.train_dataset,
             new_label_dict={
                 k: v for k, v in labels_supplied.items() if k in train_keys
             },
         )
-        self.val_dataset = update_dataset(
+        self.val_dataset = append_dataset(
             dataset=self.train_dataset,
             new_label_dict={k: v for k, v in labels_supplied.items() if k in val_keys},
         )
-        self.pool_dataset = update_dataset(
+        self.pool_dataset = subset_dataset(
             dataset=self.pool_dataset,
             keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
         )
+        # Update label file
+        labels_existing = {
+            key: float(value) for key, value in load_csv(self.label_file_path)
+        }
+        labels_existing.update(labels_supplied)
+        save_as_csv(
+            rows=[(key, value) for key, value in labels_existing.items()],
+            target=self.label_file_path,
+        )
 
         # Wipe staging area
-        for f in os.listdir(os.path.join(self.act_dir, 'images')):
-            os.remove(os.path.join(self.act_dir, 'images', f))
-        os.remove(os.path.join(self.act_dir, 'active_labels.csv'))
+        for f in os.listdir(os.path.join(self.dir_act, 'images')):
+            os.remove(os.path.join(self.dir_act, 'images', f))
+        os.remove(os.path.join(self.dir_act, 'active_labels.csv'))
 
     def fit(self) -> None:
         """Fit the model with active data."""
-        self.trainer.load_model(os.path.join(self.model_dir, 'untrained_model.h5'))
-        # TODO: fit trainer
+        self.trainer.reset_model()
+        self.trainer.fit(self.train_dataset, self.val_dataset)
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
         pass
 
-    def predict(self, keys: List[str]) -> np.ndarray:
+    def predict(self, dataset: WildlifeDataset) -> Dict[str, float]:
         """Obtain predictions for a list of keys."""
-        pass
+        return self.trainer.predict(dataset)

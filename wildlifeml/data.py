@@ -127,38 +127,25 @@ class WildlifeDataset(Sequence):
         return np.stack(imgs).astype(float), labels
 
 
-def update_dataset(
-    dataset: WildlifeDataset,
-    keys: Optional[List[str]] = None,
-    new_label_dict: Optional[Dict] = None,
-) -> WildlifeDataset:
-    """Clone a WildlifeDataset object with a new set of keys."""
+def append_dataset(dataset: WildlifeDataset, new_label_dict: Dict) -> WildlifeDataset:
+    """Clone a WildlifeDataset object and enrich with new images."""
     new_dataset = deepcopy(dataset)
+    new_keys = list(new_label_dict.keys())
+    if not all(x in new_dataset.detector_dict.keys() for x in new_keys):
+        raise ValueError('No Megadetector results found for provdided keys.')
+    new_dataset.set_keys(new_dataset.keys + new_keys)
+    new_dataset.label_dict.update(new_label_dict)
 
-    if new_label_dict is not None:
-        new_keys = list(new_label_dict.keys())
-        if (
-            keys is not None
-            and len(set.symmetric_difference(set(keys), set(new_keys))) > 0
-        ):
-            raise ValueError(
-                'Supplied "keys" and "new_label_dict" implying different sets of keys'
-            )
-        new_dataset.set_keys(new_dataset.keys + new_keys)
-        new_dataset.label_dict.update(new_label_dict)
+    return new_dataset
 
-    elif keys is not None:
-        n_new_keys = len(set.difference(set(keys), set(dataset.keys)))
-        if n_new_keys > 0:
-            raise ValueError(
-                'Expanding a dataset requires providing labels for all additional keys'
-            )
-        new_dataset.set_keys(keys)
 
-    else:
-        raise ValueError(
-            'Either set of keys or dictionary with new keys and labels must be provided'
-        )
+def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset:
+    """Clone a WildlifeDataset object and subset to given keys."""
+    new_dataset = deepcopy(dataset)
+    n_new_keys = len(set.difference(set(keys), set(dataset.keys)))
+    if n_new_keys > 0:
+        raise ValueError('Provided keys must be a subset of dataset keys.')
+    new_dataset.set_keys(keys)
 
     return new_dataset
 
@@ -227,11 +214,19 @@ def do_train_split(
 
 def filter_detector_keys(
     detector_file_path: str,
+    keys: Optional[List[str]] = None,
     min_threshold: float = 0.0,
 ) -> List[str]:
     """Get keys from directory and filter with detector results."""
     # Filter detector results for relevant detections
-    detector_dict = load_json(detector_file_path)
+    if keys is not None:
+        detector_dict = {
+            key: value
+            for key, value in load_json(detector_file_path).items()
+            if key in keys
+        }
+    else:
+        detector_dict = load_json(detector_file_path)
     print(
         'Filtering images with no detected object '
         'and not satisfying minimum threshold.'

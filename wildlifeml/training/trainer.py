@@ -1,6 +1,7 @@
 """Classes for managing training."""
 from typing import (
     Any,
+    Dict,
     List,
     Optional,
 )
@@ -32,6 +33,7 @@ class WildlifeTrainer:
     ) -> None:
         """Initialize trainer object."""
         self.num_classes = num_classes
+        self.model_backbone = model_backbone
         self.model, self.preproc_func = ModelFactory.get(
             model_id=model_backbone, num_classes=num_classes
         )
@@ -99,10 +101,21 @@ class WildlifeTrainer:
 
         return self.model
 
-    def save_model(self, file_path) -> None:
+    def reset_model(self) -> None:
+        """Set model to initial state as obtained from model factory."""
+        self.model, self.preproc_func = ModelFactory.get(
+            model_id=self.model_backbone, num_classes=self.num_classes
+        )
+
+    def save_model(self, file_path: str) -> None:
         """Save a model checkpoint."""
         self.model.save(file_path)
 
-    def load_model(self, file_path) -> None:
+    def load_model(self, file_path: str) -> None:
         """Load a model from a checkpoint."""
         self.model = keras.models.load_model(file_path)
+
+    def predict(self, dataset: Sequence) -> Dict[str, float]:
+        """Make predictions according to trained model."""
+        preds = self.model.predict(dataset)
+        return dict(zip(dataset.keys, preds))
