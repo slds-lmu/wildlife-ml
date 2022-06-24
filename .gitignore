@@ -133,6 +133,7 @@ dmypy.json
 models
 megadetector.pb
 data
+example_data
 .data
 *.json
 dummy*
