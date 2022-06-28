@@ -1,4 +1,5 @@
 """Acquisitor classes for Active Learning."""
+import heapq
 import random
 from abc import ABC, abstractmethod
 from typing import (
@@ -8,6 +9,7 @@ from typing import (
 )
 
 import numpy as np
+from scipy.stats import entropy
 
 
 class BaseAcquisitor(ABC):
@@ -33,12 +35,10 @@ class BaseAcquisitor(ABC):
         pass
 
     @staticmethod
-    # TODO rewrite for lists of keys
-    def get_top_k_indices(x: np.ndarray, k: int = 1) -> np.ndarray:
-        """Return top k indices (or all, if x has fewer than k elements)."""
-        assert len(x.shape) == 1
-        m = min(k, x.shape[0])
-        return np.argpartition(x, -m)[-m:]
+    def get_top_k_keys(predictions: Dict[str, float], top_k: int) -> List[str]:
+        """Return keys of top k values."""
+        k = min(top_k, len(predictions))
+        return heapq.nlargest(k, predictions)
 
 
 class RandomAcquisitor(BaseAcquisitor):
@@ -54,6 +54,20 @@ class RandomAcquisitor(BaseAcquisitor):
         return 'random'
 
 
+class EntropyAcquisitor(BaseAcquisitor):
+    """Random acquisition."""
+
+    def _run_acquisition(self, predictions: Dict[str, float]) -> List[str]:
+        entropy_dict = {
+            key: entropy(np.array(value), base=2) for key, value in predictions.items()
+        }
+        return self.get_top_k_keys(entropy_dict, self.top_k)
+
+    def __str__(self):
+        """Print object name."""
+        return 'entropy'
+
+
 class AcquisitorFactory:
     """Factory for creating acquisitors."""
 
@@ -64,7 +78,7 @@ class AcquisitorFactory:
         """Create acquisitor."""
         if acquisitor_name == 'random':
             return RandomAcquisitor(top_k=top_k, random_state=random_state)
+        elif acquisitor_name == 'entropy':
+            return EntropyAcquisitor(top_k=top_k)
         else:
-            raise ValueError(
-                'Acquisitor with name "{}" is unknown.'.format(acquisitor_name)
-            )
+            raise ValueError(f'Acquisitor with name "{acquisitor_name}" is unknown.')

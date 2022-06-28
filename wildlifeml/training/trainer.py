@@ -1,11 +1,11 @@
 """Classes for managing training."""
 from typing import (
     Any,
-    Dict,
     List,
     Optional,
 )
 
+import numpy as np
 from tensorflow import keras
 from tensorflow.keras import Model
 from tensorflow.keras.utils import Sequence
@@ -49,6 +49,8 @@ class WildlifeTrainer:
         self.finetune_callbacks = finetune_callbacks
         self.batch_size = batch_size
         self.num_workers = num_workers
+        # TODO add further metrics
+        self.eval_metrics = ['accuracy']
 
     def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""
@@ -57,7 +59,7 @@ class WildlifeTrainer:
             self.model.compile(
                 optimizer=self.transfer_optimizer,
                 loss=self.loss_func,
-                metrics=['accuracy'],
+                metrics=self.eval_metrics,
             )
 
             print('---> Starting transfer learning')
@@ -85,7 +87,7 @@ class WildlifeTrainer:
             self.model.compile(
                 optimizer=self.finetune_optimizer,
                 loss=self.loss_func,
-                metrics=['accuracy'],
+                metrics=self.eval_metrics,
             )
 
             print('---> Starting fine tuning')
@@ -115,7 +117,6 @@ class WildlifeTrainer:
         """Load a model from a checkpoint."""
         self.model = keras.models.load_model(file_path)
 
-    def predict(self, dataset: Sequence) -> Dict[str, float]:
+    def predict(self, dataset: Sequence) -> np.ndarray:
         """Make predictions according to trained model."""
-        preds = self.model.predict(dataset)
-        return dict(zip(dataset.keys, preds))
+        return self.model.predict(dataset)

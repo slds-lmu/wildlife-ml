@@ -129,10 +129,10 @@ class WildlifeDataset(Sequence):
 
 def append_dataset(dataset: WildlifeDataset, new_label_dict: Dict) -> WildlifeDataset:
     """Clone a WildlifeDataset object and enrich with new images."""
-    new_dataset = deepcopy(dataset)
     new_keys = list(new_label_dict.keys())
-    if not all(x in new_dataset.detector_dict.keys() for x in new_keys):
-        raise ValueError('No Megadetector results found for provdided keys.')
+    if not all(x in dataset.detector_dict.keys() for x in new_keys):
+        raise ValueError('No Megadetector results found for provided keys.')
+    new_dataset = deepcopy(dataset)
     new_dataset.set_keys(new_dataset.keys + new_keys)
     new_dataset.label_dict.update(new_label_dict)
 
@@ -141,10 +141,9 @@ def append_dataset(dataset: WildlifeDataset, new_label_dict: Dict) -> WildlifeDa
 
 def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset:
     """Clone a WildlifeDataset object and subset to given keys."""
-    new_dataset = deepcopy(dataset)
-    n_new_keys = len(set.difference(set(keys), set(dataset.keys)))
-    if n_new_keys > 0:
+    if len(set.difference(set(keys), set(dataset.keys))) > 0:
         raise ValueError('Provided keys must be a subset of dataset keys.')
+    new_dataset = deepcopy(dataset)
     new_dataset.set_keys(keys)
 
     return new_dataset

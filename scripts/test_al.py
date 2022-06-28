@@ -17,6 +17,7 @@ from wildlifeml.data import (
     WildlifeDataset,
     do_train_split,
     filter_detector_keys,
+    subset_dataset,
 )
 from wildlifeml.training.trainer import WildlifeTrainer
 from wildlifeml.utils.io import load_csv, save_as_csv
@@ -37,11 +38,11 @@ CFG: Final[Dict] = {
     'cropping': True,
     'detector_batch_size': 1,
     'detector_confidence_threshold': 0.1,
-    'split_strategy': 'random',
+    'split_strategy': 'class',
     'splits': (0.7, 0.1, 0.2),
     'al_iterations': 1,
     'al_batch_size': 32,
-    'al_acquisitor': 'random',
+    'al_acquisitor': 'entropy',
 }
 
 
@@ -54,15 +55,6 @@ CFG: Final[Dict] = {
     help='Indicate whether to run the Megadetector before training',
     default=False,
 )
-# @click.option(
-#     '--dir_pool', '-dp', help='Directory with pool images.', required=True
-# )
-# @click.option('--detector_file_pool', '-dfp', help='Path to pool Megadetector .json')
-# @click.option(
-#     '--run_detector_pool',
-#     help='Indicate whether to run the Megadetector for pool data',
-#     default=False,
-# )
 @click.option('--dir_act', '-da', help='Directory for labeling process.', required=True)
 def main(
     dir_img: str,
@@ -95,7 +87,7 @@ def main(
     # CREATE DATASETS
     # ----------------------------------------------------------------------------------
 
-    # Randomly delete labels to create pool data
+    # Mimicking actual AL loop: andomly delete labels to create pool data
     label_dict = {key: value for key, value in load_csv(label_file)}
     pool_keys_all = random.sample(list(label_dict.keys()), 300)
     label_dict_reduced = {
@@ -143,8 +135,8 @@ def main(
 
     # Initialize wildlife datasets
 
-    train_dataset = WildlifeDataset(
-        keys=train_keys,
+    labeled_dataset = WildlifeDataset(
+        keys=list(label_dict_reduced.keys()),
         image_dir=dir_img,
         label_file_path=label_file_train,
         detector_file_path=detector_file,
@@ -154,29 +146,12 @@ def main(
         augmentation=augmentation,
         shuffle=True,
     )
-
-    val_dataset = WildlifeDataset(
-        keys=val_keys,
-        image_dir=dir_img,
-        label_file_path=label_file_train,
-        detector_file_path=detector_file,
-        batch_size=CFG['batch_size'],
-        resolution=CFG['target_resolution'],
-        do_cropping=CFG['cropping'],
-        augmentation=augmentation,
-        shuffle=False,
-    )
-
-    test_dataset = WildlifeDataset(
-        keys=test_keys,
-        image_dir=dir_img,
-        label_file_path=label_file_train,
-        detector_file_path=detector_file,
-        batch_size=CFG['batch_size'],
-        resolution=CFG['target_resolution'],
-        do_cropping=CFG['cropping'],
-        shuffle=False,
-    )
+    train_dataset = subset_dataset(labeled_dataset, train_keys)
+    val_dataset = subset_dataset(labeled_dataset, val_keys)
+    test_dataset = subset_dataset(labeled_dataset, test_keys)
+    for d in [val_dataset, test_dataset]:
+        d.shuffle = False
+        d.augmentation = None
 
     pool_dataset = WildlifeDataset(
         keys=pool_keys,

@@ -7,5 +7,6 @@ numpy
 pillow
 pre-commit
 scikit-learn
+scipy
 tensorflow
 tqdm

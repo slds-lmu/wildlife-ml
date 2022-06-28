@@ -7,6 +7,8 @@ from typing import (
     Optional,
 )
 
+import numpy as np
+
 from wildlifeml.data import (
     WildlifeDataset,
     append_dataset,
@@ -42,6 +44,7 @@ class ActiveLearner:
         start_fresh: bool = True,
         start_keys: List[str] = None,
         test_dataset: Optional[WildlifeDataset] = None,
+        test_logfile_path: Optional[str] = None,
         state_cache: str = '.activecache.json',
         random_state: Optional[int] = None,
     ) -> None:
@@ -60,6 +63,7 @@ class ActiveLearner:
             acquisitor_name, top_k=al_batch_size, random_state=random_state
         )
         self.test_dataset = test_dataset
+        self.test_logfile_path = test_logfile_path
         self.al_batch_size = al_batch_size
         self.random_state = random_state
 
@@ -102,8 +106,7 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
-        # TODO: Filter self.active_labels from full target dataset.
-        preds = self.predict(self.pool_dataset)
+        preds = dict(zip(self.pool_dataset.keys, self.predict(self.pool_dataset)))
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
@@ -289,8 +292,17 @@ class ActiveLearner:
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
-        pass
+        metrics = dict(
+            zip(
+                self.trainer.model.metrics_names,
+                self.trainer.model.evaluate(self.test_dataset),
+            )
+        )
+        meta = {'iteration': self.active_counter}
+        results = dict(meta, **metrics)
+        if self.test_logfile_path is not None:
+            save_as_json(results, self.test_logfile_path)
 
-    def predict(self, dataset: WildlifeDataset) -> Dict[str, float]:
+    def predict(self, dataset: WildlifeDataset) -> np.ndarray:
         """Obtain predictions for a list of keys."""
         return self.trainer.predict(dataset)
