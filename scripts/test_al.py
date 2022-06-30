@@ -20,7 +20,11 @@ from wildlifeml.data import (
     subset_dataset,
 )
 from wildlifeml.training.trainer import WildlifeTrainer
-from wildlifeml.utils.io import load_csv, save_as_csv
+from wildlifeml.utils.io import (
+    load_csv,
+    load_pickle,
+    save_as_csv,
+)
 
 if len(tf.config.list_physical_devices('GPU')) > 1:
     raise ValueError('forgot to block GPU?')
@@ -34,14 +38,16 @@ CFG: Final[Dict] = {
     'finetune_layers': 1,
     'model_backbone': 'resnet50',
     'num_workers': 32,
+    'eval_metrics': ['accuracy'],
+    'finetune_callbacks': [keras.callbacks.EarlyStopping(patience=2)],
     'target_resolution': 224,
     'cropping': True,
     'detector_batch_size': 1,
     'detector_confidence_threshold': 0.1,
     'split_strategy': 'class',
     'splits': (0.7, 0.1, 0.2),
-    'al_iterations': 1,
-    'al_batch_size': 32,
+    'al_iterations': 2,
+    'al_batch_size': 8,
     'al_acquisitor': 'entropy',
 }
 
@@ -180,6 +186,7 @@ def main(
         transfer_callbacks=None,
         finetune_callbacks=None,
         num_workers=CFG['num_workers'],
+        eval_metrics=CFG['eval_metrics'],
     )
 
     active_learner = ActiveLearner(
@@ -193,6 +200,7 @@ def main(
         acquisitor_name=CFG['al_acquisitor'],
         start_fresh=True,
         test_dataset=test_dataset,
+        test_logfile_path=os.path.join(dir_act, 'test_logfile.pkl'),
         state_cache='.activecache.json',
         random_state=123,
     )
@@ -215,6 +223,9 @@ def main(
         )
         print('---> Supplied fresh labeled data')
         active_learner.run()
+
+    results = load_pickle(active_learner.test_logfile_path)
+    print(results)
 
 
 if __name__ == '__main__':

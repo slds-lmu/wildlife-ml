@@ -30,6 +30,7 @@ class WildlifeTrainer:
         transfer_callbacks: Optional[List] = None,
         finetune_callbacks: Optional[List] = None,
         num_workers: int = 0,
+        eval_metrics: Optional[List] = None,
     ) -> None:
         """Initialize trainer object."""
         self.num_classes = num_classes
@@ -49,8 +50,7 @@ class WildlifeTrainer:
         self.finetune_callbacks = finetune_callbacks
         self.batch_size = batch_size
         self.num_workers = num_workers
-        # TODO add further metrics
-        self.eval_metrics = ['accuracy']
+        self.eval_metrics = eval_metrics
 
     def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""

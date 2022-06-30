@@ -35,10 +35,10 @@ class BaseAcquisitor(ABC):
         pass
 
     @staticmethod
-    def get_top_k_keys(predictions: Dict[str, float], top_k: int) -> List[str]:
+    def get_top_k_keys(acq_scores: Dict[str, float], top_k: int) -> List[str]:
         """Return keys of top k values."""
-        k = min(top_k, len(predictions))
-        return heapq.nlargest(k, predictions)
+        k = min(top_k, len(acq_scores))
+        return heapq.nlargest(k, acq_scores)
 
 
 class RandomAcquisitor(BaseAcquisitor):

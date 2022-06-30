@@ -8,6 +8,12 @@ from typing import (
 )
 
 import numpy as np
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    precision_score,
+    recall_score,
+)
 
 from wildlifeml.data import (
     WildlifeDataset,
@@ -22,8 +28,10 @@ from wildlifeml.utils.io import (
     load_csv,
     load_image,
     load_json,
+    load_pickle,
     save_as_csv,
     save_as_json,
+    save_as_pickle,
 )
 from wildlifeml.utils.misc import render_bbox
 
@@ -74,7 +82,7 @@ class ActiveLearner:
         # Serves as storage for all active keys and labels.
         self.active_labels: Dict[str, float] = {}
         # Count active learning iterations
-        self.active_counter = 1
+        self.active_counter = 0
 
     def run(self) -> None:
         """Trigger Active Learning process."""
@@ -110,7 +118,6 @@ class ActiveLearner:
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
-        self.active_counter += 1
 
     def initialize(self) -> None:
         """Initialize AL run as fresh start."""
@@ -143,7 +150,6 @@ class ActiveLearner:
         # Move initial data and exit.
         self.fill_active_stage(staging_keys)
         self.save_state()
-        self.active_counter += 1
 
     def load_state(self) -> None:
         """Initialize active learner from state file."""
@@ -156,6 +162,7 @@ class ActiveLearner:
             self.random_state = state['random_state']
             self.active_labels = state['active_labels']
             self.active_counter = state['active_counter']
+            self.active_counter += 1
 
             self.acquisitor = AcquisitorFactory.get(
                 state['acquisitor_name'],
@@ -292,16 +299,54 @@ class ActiveLearner:
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
-        metrics = dict(
+        logfile = {}
+        if self.test_logfile_path is not None and os.path.exists(
+            self.test_logfile_path
+        ):
+            logfile = load_pickle(self.test_logfile_path)
+
+        print('---> Evaluating on test data')
+        # TODO find out whether keras metrics are valid (seem very optimistic)
+        keras_metrics = dict(
             zip(
                 self.trainer.model.metrics_names,
                 self.trainer.model.evaluate(self.test_dataset),
             )
         )
-        meta = {'iteration': self.active_counter}
-        results = dict(meta, **metrics)
-        if self.test_logfile_path is not None:
-            save_as_json(results, self.test_logfile_path)
+        if self.test_dataset is not None:
+            y_true = np.array(
+                [
+                    value
+                    for key, value in self.test_dataset.label_dict.items()
+                    if key in self.test_dataset.keys
+                ]
+            )
+            preds = self.predict(self.test_dataset)
+            y_pred = np.argmax(preds, axis=1)
+            acc = accuracy_score(y_true=y_true, y_pred=y_pred)
+            prec = precision_score(
+                y_true=y_true,
+                y_pred=y_pred,
+                average='macro',
+                zero_division=0,
+            )
+            rec = recall_score(
+                y_true=y_true,
+                y_pred=y_pred,
+                average='macro',
+                zero_division=0,
+            )
+            custom_metrics = {
+                'accuracy_skl': acc,
+                'precision': prec,
+                'recall': rec,
+                'confusion_matrix': confusion_matrix(y_true=y_true, y_pred=y_pred),
+            }
+            results = dict(keras_metrics, **custom_metrics)
+            print(f'accuracy: {acc:.3f}, precision: {prec:.3f}, recall: {rec:.3f}')
+            if self.test_logfile_path is not None:
+                logfile.update({f'iteration {self.active_counter}': results})
+                save_as_pickle(logfile, self.test_logfile_path)
 
     def predict(self, dataset: WildlifeDataset) -> np.ndarray:
         """Obtain predictions for a list of keys."""
