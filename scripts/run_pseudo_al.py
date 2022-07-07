@@ -1,15 +1,16 @@
-"""This script serves as an example to train an active learner with wildlifeml."""
+"""Run active learning without an actual human in the loop."""
+
 import os
 import random
 from typing import (
     Dict,
     Final,
     Optional,
+    Tuple,
 )
 
 import albumentations as A
 import click
-import tensorflow as tf
 from tensorflow import keras
 
 from wildlifeml import ActiveLearner, MegaDetector
@@ -25,9 +26,6 @@ from wildlifeml.utils.io import (
     load_pickle,
     save_as_csv,
 )
-
-if len(tf.config.list_physical_devices('GPU')) > 1:
-    raise ValueError('forgot to block GPU?')
 
 # Dictionary containing desired params
 CFG: Final[Dict] = {
@@ -46,10 +44,37 @@ CFG: Final[Dict] = {
     'detector_confidence_threshold': 0.1,
     'split_strategy': 'class',
     'splits': (0.7, 0.1, 0.2),
+    'al_pool_size': 300,
     'al_iterations': 2,
     'al_batch_size': 8,
     'al_acquisitor': 'entropy',
 }
+
+
+def carve_out_pool_data(
+    label_file: str, pool_size: int, dir_img: str
+) -> Tuple[str, str]:
+    """Mimicking actual AL loop: randomly split data into labeled and pool subsets."""
+    label_dict = {key: value for key, value in load_csv(label_file)}
+    try:
+        pool_keys = random.sample(list(label_dict.keys()), pool_size)
+    except ValueError as e:
+        if 'Sample larger than population' in str(e):
+            e.args = ('Pool size must be smaller than total number of instances.',)
+        raise e
+    # Create new dicts and csv files for labeled and pool data, respectively, to keep
+    # original label file unaltered
+    label_dict_pool = {k: v for k, v in label_dict.items() if k in pool_keys}
+    label_dict_labeled = {
+        k: v for k, v in label_dict.items() if k not in label_dict_pool
+    }
+    label_files = [
+        os.path.join(dir_img, f'label_file_{n}.csv') for n in ['pool', 'labeled']
+    ]
+    for n, d in zip(label_files, [label_dict_pool, label_dict_labeled]):
+        save_as_csv(rows=[(k, v) for k, v in d.items()], target=label_file)
+
+    return label_files[0], label_files[1]
 
 
 @click.command()
@@ -93,41 +118,28 @@ def main(
     # CREATE DATASETS
     # ----------------------------------------------------------------------------------
 
-    # Mimicking actual AL loop: andomly delete labels to create pool data
-    label_dict = {key: value for key, value in load_csv(label_file)}
-    pool_keys_all = random.sample(list(label_dict.keys()), 300)
-    label_dict_reduced = {
-        key: value for key, value in label_dict.items() if key not in pool_keys_all
-    }
-    label_file_train = os.path.join(dir_img, 'label_file_train.csv')
-    save_as_csv(
-        rows=[(key, value) for key, value in label_dict_reduced.items()],
-        target=label_file_train,
+    label_file_pool, label_file_labeled = carve_out_pool_data(
+        label_file=label_file,
+        pool_size=CFG['al_pool_size'],
+        dir_img=dir_img,
     )
-    label_dict_pool = {
-        key: value for key, value in label_dict.items() if key in pool_keys_all
-    }
-    label_file_pool = os.path.join(dir_img, 'label_file_pool.csv')
-    save_as_csv(
-        rows=[(key, value) for key, value in label_dict_pool.items()],
-        target=label_file_pool,
-    )
-
-    # Split active training dataset keys in train, val and test, discarding keys below
-    # detection threshold
-    train_keys, val_keys, test_keys = do_train_split(
-        label_file_path=label_file_train,
-        detector_file_path=detector_file,
-        min_threshold=0.0,
-        splits=CFG['splits'],
-        strategy=CFG['split_strategy'],
-    )
+    label_dict_pool = {k: v for k, v in load_csv(label_file_pool)}
+    label_dict_labeled = {k: v for k, v in load_csv(label_file_labeled)}
 
     # Get keys of pool data above detection threshold
     pool_keys = filter_detector_keys(
-        keys=pool_keys_all,
+        keys=list(label_dict_pool.keys()),
         detector_file_path=detector_file,
-        min_threshold=0.0,
+        min_threshold=CFG['detector_confidence_threshold'],
+    )
+    # Split active training dataset keys in train, val and test, keeping only keys
+    # above detection threshold
+    train_keys, val_keys, test_keys = do_train_split(
+        label_file_path=label_file_labeled,
+        detector_file_path=detector_file,
+        min_threshold=CFG['detector_confidence_threshold'],
+        splits=CFG['splits'],
+        strategy=CFG['split_strategy'],
     )
 
     # Declare training augmentation
@@ -142,9 +154,9 @@ def main(
     # Initialize wildlife datasets
 
     labeled_dataset = WildlifeDataset(
-        keys=list(label_dict_reduced.keys()),
+        keys=list(label_dict_labeled.keys()),
         image_dir=dir_img,
-        label_file_path=label_file_train,
+        label_file_path=label_file_labeled,
         detector_file_path=detector_file,
         batch_size=CFG['batch_size'],
         resolution=CFG['target_resolution'],
@@ -194,7 +206,7 @@ def main(
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         pool_dataset=pool_dataset,
-        label_file_path=label_file_train,
+        label_file_path=label_file_labeled,
         al_batch_size=CFG['al_batch_size'],
         active_directory=dir_act,
         acquisitor_name=CFG['al_acquisitor'],

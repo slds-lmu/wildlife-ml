@@ -1,3 +1,4 @@
+export CUDA_VISIBLE_DEVICES=$1
 rm -rf example_data/active/*
 rm .activecache.json
 python test_al.py \
