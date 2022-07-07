@@ -1,6 +1,8 @@
 """Classes and functions for I/O Operations."""
 import csv
 import json
+import os
+import pickle
 from typing import (
     Any,
     Collection,
@@ -39,6 +41,12 @@ def load_csv_dict(file_path: str) -> List[Dict[str, str]]:
         return [r for r in csv_reader]
 
 
+def load_pickle(filepath: str) -> Any:
+    """Load a binary file to a python object."""
+    with open(filepath, 'rb') as f:
+        return pickle.load(f)
+
+
 def save_as_json(dictionary: Any, target: str) -> None:
     """Save a python object as JSON file."""
     with open(target, 'w', encoding='utf-8') as f:
@@ -64,3 +72,12 @@ def save_as_csv_dict(
         writer = csv.DictWriter(f, fieldnames=header)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def save_as_pickle(file: Any, filepath: str) -> None:
+    """Save a generic object to a binary file."""
+    file_dir, _ = os.path.split(filepath)
+    os.makedirs(file_dir, exist_ok=True)
+
+    with open(filepath, 'wb') as handle:
+        pickle.dump(file, handle, protocol=pickle.HIGHEST_PROTOCOL)

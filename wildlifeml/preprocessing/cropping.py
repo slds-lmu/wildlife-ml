@@ -47,9 +47,9 @@ class Cropper:
         """Get array indices from relative bbox positions."""
         height, width = dims
 
-        x_start = int(bbox[0] * width) - 1
+        x_start = max(int(bbox[0] * width) - 1, 0)
         x_end = int((bbox[0] + bbox[2]) * width) - 1
-        y_start = int(bbox[1] * height) - 1
+        y_start = max(int(bbox[1] * height) - 1, 0)
         y_end = int((bbox[1] + bbox[3]) * height) - 1
 
         return (x_start, x_end), (y_start, y_end)

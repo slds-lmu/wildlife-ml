@@ -2,6 +2,7 @@
 import os
 import random
 import shutil
+from copy import deepcopy
 from math import ceil
 from typing import (
     Any,
@@ -12,10 +13,9 @@ from typing import (
     Tuple,
 )
 
+import albumentations as A
 import numpy as np
 from sklearn.model_selection import train_test_split
-from tensorflow.image import resize
-from tensorflow.keras import Sequential
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
@@ -36,34 +36,54 @@ class WildlifeDataset(Sequence):
     def __init__(
         self,
         keys: List[str],
-        label_file_path: str,
+        image_dir: str,
         detector_file_path: str,
         batch_size: int,
+        label_file_path: Optional[str] = None,
         shuffle: bool = True,
         resolution: int = 224,
-        augmentation: Optional[Sequential] = None,
+        augmentation: Optional[A.Compose] = None,
         do_cropping: bool = True,
         rescale_bbox: bool = True,
         pad: bool = True,
     ) -> None:
         """Initialize a WildlifeDataset object."""
         self.keys = keys
-        self.label_dict = {key: val for key, val in load_csv(label_file_path)}
+        self.img_dir = image_dir
+
+        if label_file_path is not None:
+            self.is_supervised = True
+            self.label_dict = {
+                key: float(val) for key, val in load_csv(label_file_path)
+            }
+        else:
+            self.is_supervised = False
+            self.label_dict = {}
 
         self.detector_dict = load_json(detector_file_path)
 
         self.batch_size = batch_size
         self.shuffle = shuffle
+        if self.shuffle:
+            self._exec_shuffle()
 
         self.target_resolution = resolution
         self.augmentation = augmentation
         self.do_cropping = do_cropping
         self.cropper = Cropper(rescale_bbox=rescale_bbox, pad=pad)
 
+    def set_keys(self, keys: List[str]) -> None:
+        """Change keys in dataset after instantiation. HANDLE WITH CARE."""
+        self.keys = keys
+
+    def _exec_shuffle(self) -> None:
+        """Shuffle the dataset."""
+        random.shuffle(self.keys)
+
     def on_epoch_end(self) -> None:
         """Execute after every epoch in the keras `.fit()` method."""
         if self.shuffle:
-            random.shuffle(self.keys)
+            self._exec_shuffle()
 
     def __len__(self) -> int:
         """Return the number of batches in the dataset."""
@@ -79,25 +99,54 @@ class WildlifeDataset(Sequence):
         imgs = []
         for key in batch_keys:
             entry = self.detector_dict[key]
-            img = np.asarray(load_image(entry['file']))
+            img_path = os.path.join(self.img_dir, key)
+            img = np.asarray(load_image(img_path))
 
             # Crop according to bounding box if applicable
             if self.do_cropping and len(entry['detections']) > 0:
                 img = self.cropper.crop(img, bbox=entry['detections'][0]['bbox'])
 
             # Resize to target resolution for network
-            img = resize(img, (self.target_resolution, self.target_resolution))
+            img = A.resize(
+                img, height=self.target_resolution, width=self.target_resolution
+            )
 
             # Apply data augmentations to image
             if self.augmentation is not None:
-                img = self.augmentation(img)
+                img = self.augmentation(image=img)['image']
 
             imgs.append(img)
 
         # Extract labels
-        labels = np.asarray([self.label_dict[key] for key in batch_keys])
+        if self.is_supervised:
+            labels = np.asarray([self.label_dict[key] for key in batch_keys])
+        else:
+            # We need to add a dummy for unsupervised case because TF.
+            labels = np.empty(shape=self.batch_size, dtype=float)
 
-        return np.stack(imgs), labels
+        return np.stack(imgs).astype(float), labels
+
+
+def append_dataset(dataset: WildlifeDataset, new_label_dict: Dict) -> WildlifeDataset:
+    """Clone a WildlifeDataset object and enrich with new images."""
+    new_keys = list(new_label_dict.keys())
+    if not all(x in dataset.detector_dict.keys() for x in new_keys):
+        raise ValueError('No Megadetector results found for provided keys.')
+    new_dataset = deepcopy(dataset)
+    new_dataset.set_keys(new_dataset.keys + new_keys)
+    new_dataset.label_dict.update(new_label_dict)
+
+    return new_dataset
+
+
+def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset:
+    """Clone a WildlifeDataset object and subset to given keys."""
+    if len(set.difference(set(keys), set(dataset.keys))) > 0:
+        raise ValueError('Provided keys must be a subset of dataset keys.')
+    new_dataset = deepcopy(dataset)
+    new_dataset.set_keys(keys)
+
+    return new_dataset
 
 
 # --------------------------------------------------------------------------------------
@@ -117,20 +166,9 @@ def do_train_split(
 
     # Filter detector results for relevant detections
     if detector_file_path is not None:
-        detector_dict = load_json(detector_file_path)
-        print(
-            'Filtering images with no detected object '
-            'and not satisfying minimum threshold.'
-        )
-        new_keys = [
-            key
-            for key, val in detector_dict.items()
-            if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
-        ]
-        print(
-            'Filtered out {} elements. Current dataset size is {}.'.format(
-                len(label_dict) - len(new_keys), len(new_keys)
-            )
+        new_keys = filter_detector_keys(
+            detector_file_path=detector_file_path,
+            min_threshold=min_threshold,
         )
         label_dict = {
             key: label_dict[key] for key in label_dict.keys() if key in new_keys
@@ -171,6 +209,38 @@ def do_train_split(
         )
 
     return keys_train, keys_val, keys_test
+
+
+def filter_detector_keys(
+    detector_file_path: str,
+    keys: Optional[List[str]] = None,
+    min_threshold: float = 0.0,
+) -> List[str]:
+    """Get keys from directory and filter with detector results."""
+    # Filter detector results for relevant detections
+    if keys is not None:
+        detector_dict = {
+            key: value
+            for key, value in load_json(detector_file_path).items()
+            if key in keys
+        }
+    else:
+        detector_dict = load_json(detector_file_path)
+    print(
+        'Filtering images with no detected object '
+        'and not satisfying minimum threshold.'
+    )
+    new_keys = [
+        key
+        for key, val in detector_dict.items()
+        if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
+    ]
+    print(
+        f'Filtered out {len(detector_dict.keys()) - len(new_keys)} elements. '
+        f'Current dataset size is {len(new_keys)}.'
+    )
+
+    return new_keys
 
 
 def get_stratifier(
@@ -287,7 +357,7 @@ class DatasetConverter:
         label_list = []
 
         for cls in (pbar := tqdm(class_dirs)):
-            pbar.set_description('Processing {}'.format(cls))
+            pbar.set_description(f'Processing {cls}')
 
             orig_root = os.path.join(self.root_dir, cls)
             label = label_map[cls]
