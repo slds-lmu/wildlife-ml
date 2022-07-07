@@ -72,7 +72,7 @@ def carve_out_pool_data(
         os.path.join(dir_img, f'label_file_{n}.csv') for n in ['pool', 'labeled']
     ]
     for n, d in zip(label_files, [label_dict_pool, label_dict_labeled]):
-        save_as_csv(rows=[(k, v) for k, v in d.items()], target=label_file)
+        save_as_csv(rows=[(k, v) for k, v in d.items()], target=n)
 
     return label_files[0], label_files[1]
 
