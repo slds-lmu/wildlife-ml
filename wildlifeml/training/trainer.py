@@ -1,4 +1,5 @@
 """Classes for managing training."""
+from abc import ABC, abstractmethod
 from typing import (
     Any,
     List,
@@ -13,7 +14,41 @@ from tensorflow.keras.utils import Sequence
 from wildlifeml.training.models import ModelFactory
 
 
-class WildlifeTrainer:
+class BaseTrainer(ABC):
+    """Base class for trainer objects."""
+
+    @abstractmethod
+    def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
+        """Fit the model on the provided dataset."""
+        pass
+
+    @abstractmethod
+    def get_model(self) -> Model:
+        """Return the model instance."""
+        pass
+
+    @abstractmethod
+    def reset_model(self) -> None:
+        """Set model to initial state as obtained from model factory."""
+        pass
+
+    @abstractmethod
+    def save_model(self, file_path: str) -> None:
+        """Save a model checkpoint."""
+        pass
+
+    @abstractmethod
+    def load_model(self, file_path: str) -> None:
+        """Load a model from a checkpoint."""
+        pass
+
+    @abstractmethod
+    def predict(self, dataset: Sequence) -> np.ndarray:
+        """Make predictions according to trained model."""
+        pass
+
+
+class WildlifeTrainer(BaseTrainer):
     """Trainer object for assisting with fitting neural networks."""
 
     def __init__(
@@ -103,6 +138,10 @@ class WildlifeTrainer:
 
         return self.model
 
+    def get_model(self) -> Model:
+        """Return the model instance."""
+        return self.model
+
     def reset_model(self) -> None:
         """Set model to initial state as obtained from model factory."""
         self.model, self.preproc_func = ModelFactory.get(
@@ -120,3 +159,31 @@ class WildlifeTrainer:
     def predict(self, dataset: Sequence) -> np.ndarray:
         """Make predictions according to trained model."""
         return self.model.predict(dataset)
+
+
+class WildlifeTuningTrainer(BaseTrainer):
+    """Trainer class for hyperparameter tuning."""
+
+    def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
+        """Fit the model on the provided dataset."""
+        pass
+
+    def get_model(self) -> Model:
+        """Return the model instance."""
+        pass
+
+    def reset_model(self) -> None:
+        """Set model to initial state as obtained from model factory."""
+        pass
+
+    def save_model(self, file_path: str) -> None:
+        """Save a model checkpoint."""
+        pass
+
+    def load_model(self, file_path: str) -> None:
+        """Load a model from a checkpoint."""
+        pass
+
+    def predict(self, dataset: Sequence) -> np.ndarray:
+        """Make predictions according to trained model."""
+        pass

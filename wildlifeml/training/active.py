@@ -23,7 +23,7 @@ from wildlifeml.data import (
 )
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
-from wildlifeml.training.trainer import WildlifeTrainer
+from wildlifeml.training.trainer import BaseTrainer
 from wildlifeml.utils.io import (
     load_csv,
     load_image,
@@ -41,7 +41,7 @@ class ActiveLearner:
 
     def __init__(
         self,
-        trainer: WildlifeTrainer,
+        trainer: BaseTrainer,
         train_dataset: WildlifeDataset,
         val_dataset: WildlifeDataset,
         pool_dataset: WildlifeDataset,
@@ -307,10 +307,11 @@ class ActiveLearner:
 
         print('---> Evaluating on test data')
         # TODO find out whether keras metrics are valid (seem very optimistic)
+        model = self.trainer.get_model()
         keras_metrics = dict(
             zip(
-                self.trainer.model.metrics_names,
-                self.trainer.model.evaluate(self.test_dataset),
+                model.metrics_names,
+                model.evaluate(self.test_dataset),
             )
         )
         if self.test_dataset is not None:
