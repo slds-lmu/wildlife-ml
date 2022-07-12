@@ -90,9 +90,9 @@ class BreakingTiesAcquisitor(BaseAcquisitor):
         return 'breakingties'
 
     @staticmethod
-    def _break_ties(x: np.array) -> float:
+    def _break_ties(x: np.ndarray) -> float:
         """Compute difference between top-2-largest values in vector."""
-        top_two = heapq.nlargest(2, x)
+        top_two: List[float] = heapq.nlargest(2, x)
         return abs(top_two[0] - top_two[1])
 
 
