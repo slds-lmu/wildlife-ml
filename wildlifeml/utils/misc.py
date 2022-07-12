@@ -1,11 +1,17 @@
 """Miscellaneous utilities."""
 import math
 import os
-from typing import List, Tuple
+from typing import (
+    List,
+    Optional,
+    Tuple,
+)
 from urllib import request
 
 import numpy as np
 from PIL import Image, ImageDraw
+
+from wildlifeml.utils.io import load_json, save_as_csv
 
 
 def download_file(url: str, target_path: str) -> None:
@@ -71,3 +77,21 @@ def render_bbox(
         width=border_width,
     )
     return img
+
+
+def separate_empties(
+    detector_file_path: str,
+    conf_threshold: float,
+    label_file_path: Optional[str] = None,
+) -> Tuple[List[str], List[str]]:
+    """Separate images into empty and non-empty instances according to Megadetector."""
+    detector_dict = load_json(detector_file_path)
+    keys_nonempty = [
+        key
+        for key, val in detector_dict.items()
+        if len(val['detections']) > 0 and val['max_detection_conf'] >= conf_threshold
+    ]
+    keys_empty = [key for key in detector_dict.keys() if key not in keys_nonempty]
+    if label_file_path is not None:
+        save_as_csv(rows=[(key, '-1') for key in keys_empty], target=label_file_path)
+    return keys_empty, keys_nonempty
