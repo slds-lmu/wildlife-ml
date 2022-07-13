@@ -91,7 +91,7 @@ def separate_empties(
         for key, val in detector_dict.items()
         if len(val['detections']) > 0 and val['max_detection_conf'] >= conf_threshold
     ]
-    keys_empty = [key for key in detector_dict.keys() if key not in keys_nonempty]
+    keys_empty = list(set(detector_dict.keys()) - set(keys_nonempty))
     if label_file_path is not None:
         save_as_csv(rows=[(key, '-1') for key in keys_empty], target=label_file_path)
     return keys_empty, keys_nonempty
