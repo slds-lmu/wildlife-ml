@@ -99,12 +99,11 @@ class WildlifeDataset(Sequence):
         imgs = []
         for key in batch_keys:
             entry = self.detector_dict[key]
-            img_path = os.path.join(self.img_dir, key)
-            img = np.asarray(load_image(img_path))
+            img = np.asarray(load_image(entry['file']))
 
             # Crop according to bounding box if applicable
-            if self.do_cropping and len(entry['detections']) > 0:
-                img = self.cropper.crop(img, bbox=entry['detections'][0]['bbox'])
+            if self.do_cropping and entry.get('bbox') is not None:
+                img = self.cropper.crop(img, bbox=entry['bbox'])
 
             # Resize to target resolution for network
             img = A.resize(
