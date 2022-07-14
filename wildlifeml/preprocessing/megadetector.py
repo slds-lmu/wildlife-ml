@@ -89,7 +89,7 @@ class MegaDetector:
             # Add an entry for every bounding box found with own key
             for detections, f_path in zip(batch_result.values(), batch_files):
                 key_stem = os.path.split(f_path)[1]
-                for i, detection in enumerate(detections):
+                for i, detection in enumerate(detections, start=1):
                     detection.update({'file': f_path})
                     output_dict.update({key_stem + '_' + str(i).zfill(3): detection})
 
@@ -98,9 +98,7 @@ class MegaDetector:
                         {
                             key_stem
                             + '_'
-                            + str(1).zfill(3): {
-                                'category': int(-1),
-                            }
+                            + str(1).zfill(3): {'category': int(-1), 'file': f_path}
                         }
                     )
 
