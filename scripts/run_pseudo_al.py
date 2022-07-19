@@ -236,8 +236,9 @@ def main(
         print('---> Supplied fresh labeled data')
         active_learner.run()
 
-    results = load_pickle(active_learner.test_logfile_path)
-    print(results)
+    if active_learner.test_logfile_path is not None:
+        results = load_pickle(active_learner.test_logfile_path)
+        print(results)
 
 
 if __name__ == '__main__':
