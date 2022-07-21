@@ -11,7 +11,7 @@ from urllib import request
 import numpy as np
 from PIL import Image, ImageDraw
 
-from wildlifeml.utils.io import load_json, save_as_csv
+from wildlifeml.utils.io import load_json
 
 
 def download_file(url: str, target_path: str) -> None:
@@ -81,17 +81,20 @@ def render_bbox(
 
 def separate_empties(
     detector_file_path: str,
-    conf_threshold: float,
-    label_file_path: Optional[str] = None,
+    conf_threshold: Optional[float] = None,
 ) -> Tuple[List[str], List[str]]:
     """Separate images into empty and non-empty instances according to Megadetector."""
     detector_dict = load_json(detector_file_path)
-    keys_nonempty = [
-        key
-        for key, val in detector_dict.items()
-        if len(val['detections']) > 0 and val['max_detection_conf'] >= conf_threshold
+    keys_empty = [
+        k for k in detector_dict.keys() if detector_dict[k].get('category') == -1
     ]
-    keys_empty = list(set(detector_dict.keys()) - set(keys_nonempty))
-    if label_file_path is not None:
-        save_as_csv(rows=[(key, '-1') for key in keys_empty], target=label_file_path)
+    if conf_threshold is not None:
+        keys_empty.append(
+            [
+                k
+                for k in detector_dict.keys()
+                if detector_dict[k].get('conf') < conf_threshold
+            ]
+        )
+    keys_nonempty = list(set(detector_dict.keys()) - set(keys_empty))
     return keys_empty, keys_nonempty
