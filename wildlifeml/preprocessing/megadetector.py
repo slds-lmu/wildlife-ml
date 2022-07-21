@@ -78,6 +78,7 @@ class MegaDetector:
         # Traverse through list according to batch size.
         print('Predicting bounding boxes ...')
         output_dict = {}
+        cnt_empty = 0
         for i in trange(0, len(file_paths), self.batch_size):
             batch_files = file_paths[i : i + self.batch_size]
 
@@ -101,8 +102,13 @@ class MegaDetector:
                             + str(1).zfill(3): {'category': int(-1), 'file': f_path}
                         }
                     )
+                    cnt_empty += 1
 
-        print('Processing finished.')
+        share_empty = cnt_empty / len(file_names) * 100
+        print(
+            f'Processing finished. Found bounding boxes for {1-share_empty} percent of '
+            f'images at threshold {self.confidence_threshold}.'
+        )
 
         # Save output as JSON file
         if save_file:
