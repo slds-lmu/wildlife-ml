@@ -7,6 +7,7 @@ from math import ceil
 from typing import (
     Any,
     Dict,
+    Final,
     List,
     Literal,
     Optional,
@@ -15,7 +16,7 @@ from typing import (
 
 import albumentations as A
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
@@ -28,6 +29,8 @@ from wildlifeml.utils.io import (
     save_as_json,
 )
 from wildlifeml.utils.misc import list_files
+
+BBOX_SUFFIX_LEN: Final[int] = 4
 
 
 class WildlifeDataset(Sequence):
@@ -118,7 +121,7 @@ class WildlifeDataset(Sequence):
 
         # Extract labels
         if self.is_supervised:
-            batch_keys_stem = [key[: len(key) - 4] for key in batch_keys]
+            batch_keys_stem = [key[: len(key) - BBOX_SUFFIX_LEN] for key in batch_keys]
             labels = np.asarray([self.label_dict[key] for key in batch_keys_stem])
         else:
             # We need to add a dummy for unsupervised case because TF.
@@ -152,153 +155,115 @@ def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset
 # --------------------------------------------------------------------------------------
 
 
-def do_train_split(
+def do_stratified_cv(
     label_file_path: str,
-    splits: Tuple[float, float, float],
-    strategy: Literal['random', 'class', 'class_plus_custom'],
-    stratifier_file_path: Optional[str] = None,
+    detector_file_path: str,
+    keys: List[str],
+    strategy: Literal['threeway', 'cv'],
+    splits: Optional[Tuple[float, float, float]],
+    folds: Optional[int],
+    stratifier: List,
     random_state: Optional[int] = None,
-    detector_file_path: Optional[str] = None,
-    min_threshold: float = 0.0,
-) -> Tuple[List[str], List[str], List[str]]:
-    """Split a csv with labels in train & test data and filter with detector results."""
-    label_dict = {key: value for key, value in load_csv(label_file_path)}
+) -> Tuple[List[Any], ...]:
+    """Perform stratified cross-validation."""
+    keys_img = list(set([k[: len(k) - BBOX_SUFFIX_LEN] for k in keys]))
 
-    # Filter detector results for relevant detections
-    if detector_file_path is not None:
-        new_keys = filter_detector_keys(
-            detector_file_path=detector_file_path,
-            min_threshold=min_threshold,
-        )
-        label_dict = {
-            key: label_dict[key] for key in label_dict.keys() if key in new_keys
-        }
+    label_dict = {k: v for k, v in load_csv(label_file_path) if k in keys_img}
+    detector_dict = {k: v for k, v in load_json(detector_file_path) if k in keys}
+    strat_var = get_strat_var(stratifier)
+    keys_array = np.array(list(label_dict.keys()))
+    strat_var_array = np.array(strat_var)
 
-    # Define stratification variable (none, class labels or class labels + custom)
-    stratify = get_stratifier(
-        strategy=strategy,
-        label_dict=label_dict,
-        stratifier_file_path=stratifier_file_path,
-    )
+    if strategy == 'threeway':
+        if splits is None:
+            raise ValueError('Please provide split ratio for three-way splitting.')
 
-    # Make stratified split and throw error if stratification variable lacks support
-    # keys_train, keys_val, keys_test = [], [], []
-    keys_train, keys_test = try_split(
-        list(label_dict.keys()),
-        train_size=splits[0] + splits[1],
-        test_size=splits[2],
-        random_state=random_state,
-        stratify=stratify,
-    )
-    keys_val = ['']
-
-    # Reiterate process to split keys_train in train and val if required
-    if splits[1] > 0:
-        label_dict = {key: val for key, val in label_dict.items() if key in keys_train}
-        stratify = get_stratifier(
-            strategy=strategy,
-            label_dict=label_dict,
-            stratifier_file_path=stratifier_file_path,
-        )
-        keys_train, keys_val = try_split(
-            keys_train,
+        # Split intro train and test keys
+        sss_tt = StratifiedShuffleSplit(
+            n_splits=1,
             train_size=splits[0] + splits[1],
             test_size=splits[2],
             random_state=random_state,
-            stratify=stratify,
         )
+        idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
+        keys_train = keys_img[idx_train]
+        keys_test = keys_img[idx_test]
+        keys_val = ['']
 
-    return keys_train, keys_val, keys_test
+        if splits[1] > 0:
 
+            # Split train again into train and val
+            stratifier_train = []
+            for i in range(len(stratifier)):
+                stratifier_train.append(stratifier[i][idx_train])
+            keys_array = np.array(keys_train)
+            strat_var_array = np.array(get_strat_var(stratifier_train))
+            sss_tv = StratifiedShuffleSplit(
+                n_splits=1,
+                train_size=splits[0],
+                test_size=splits[1],
+                random_state=random_state,
+            )
+            idx_train, idx_val = next(iter(sss_tv.split(keys_array, strat_var_array)))
+            keys_train = keys_train[idx_train]
+            keys_val = keys_train[idx_val]
 
-def filter_detector_keys(
-    detector_file_path: str,
-    keys: Optional[List[str]] = None,
-    min_threshold: float = 0.0,
-) -> List[str]:
-    """Get keys from directory and filter with detector results."""
-    # Filter detector results for relevant detections
-    if keys is not None:
-        detector_dict = {
-            key: value
-            for key, value in load_json(detector_file_path).items()
-            if key in keys
-        }
+        # Get keys on bbox level
+        keys_train = rematch_keys(keys_train, detector_dict)
+        keys_val = rematch_keys(keys_val, detector_dict)
+        keys_test = rematch_keys(keys_test, detector_dict)
+
+        return keys_train, keys_val, keys_test
+
+    elif strategy == 'cv':
+
+        if folds is None:
+            raise ValueError('Please provide number of folds in cross-validation.')
+
+        # Get k train-test splits
+        skf = StratifiedKFold(n_splits=folds, random_state=random_state)
+        idx_train = [list(i) for i, _ in skf.split(keys_array, np.array(strat_var))]
+        idx_test = [list(j) for _, j in skf.split(keys_array, np.array(strat_var))]
+        keys_train = [keys_img[i] for i in idx_train]
+        keys_test = [keys_img[i] for i in idx_test]
+
+        # Get keys on bbox level
+        keys_train = [rematch_keys(i, detector_dict) for i in keys_train]
+        keys_test = [rematch_keys(i, detector_dict) for i in keys_test]
+
+        return keys_train, keys_test
+
     else:
-        detector_dict = load_json(detector_file_path)
-    print(
-        'Filtering images with no detected object '
-        'and not satisfying minimum threshold.'
-    )
-    new_keys = [
-        key
-        for key, val in detector_dict.items()
-        if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
-    ]
-    print(
-        f'Filtered out {len(detector_dict.keys()) - len(new_keys)} elements. '
-        f'Current dataset size is {len(new_keys)}.'
-    )
-
-    return new_keys
+        raise ValueError(f'Strategy "{strategy} not implemented.')
 
 
-def get_stratifier(
-    strategy: str,
-    label_dict: Dict,
-    stratifier_file_path: Optional[str] = None,
-) -> Any:
+def get_strat_var(stratification_vars: List) -> Any:
     """Create stratifying variable for dataset splitting."""
-    if strategy == 'random':
+    if len(stratification_vars) == 0:
         return None
 
-    elif strategy == 'class':
-        return np.array(list(label_dict.values()))
-
-    elif strategy == 'class_plus_custom':
-        if stratifier_file_path is None:
-            raise ValueError(
-                f'Strategy "{strategy}" requires file with key-stratifier pairs'
-            )
-        stratifier_dict = {
-            key: value
-            for key, value in load_csv(stratifier_file_path)
-            if key in label_dict.keys()
-        }
-        return np.dstack(
-            (list(label_dict.values()), list(stratifier_dict.values()))
-        ).squeeze(0)
-
     else:
-        raise ValueError(f'"{strategy}" is not a valid splitting strategy')
+        lengths = [len(x) for x in stratification_vars]
+        if len(set(lengths)) > 1:
+            raise ValueError(
+                'All variables provided for stratification must have the same number '
+                'of elements.'
+            )
+        stratifier = []
+        for i in range(set(lengths).pop()):
+            strat_var_concat = '_'.join(
+                str(stratification_vars[i][j]) for j in range(len(stratification_vars))
+            )
+            stratifier.append(strat_var_concat)
+        return stratifier
 
 
-def try_split(
-    keys: List[str],
-    train_size: float,
-    test_size: float,
-    random_state=Optional[int],
-    stratify=Any,
-) -> Tuple[List[str], List[str]]:
-    """Attempt stratified split with sklearn."""
-    stratification_warning = (
-        'Stratified sampling is only supported for stratifying '
-        'variables with sufficient data support in each category. '
-        'Try grouping infrequent categories into larger ones.'
-    )
-    try:
-        return train_test_split(
-            keys,
-            train_size=train_size,
-            test_size=test_size,
-            random_state=random_state,
-            stratify=stratify,
-        )
-
-    except ValueError as e:
-        if 'least populated class' in str(e):
-            e.args = (stratification_warning,)
-        raise e
+def rematch_keys(img_keys: List[str], detector_dict: Dict) -> List[str]:
+    """Find all bbox-level keys for img_keys."""
+    bbox_keys = []
+    for i in img_keys:
+        bbox_keys.extend([k for k in detector_dict.keys() if i in k])
+    return bbox_keys
 
 
 # --------------------------------------------------------------------------------------
