@@ -90,8 +90,8 @@ class WildlifeDataset(Sequence):
         return ceil(len(self.keys) / self.batch_size)
 
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
-        """Return a batch with training data and labels."""
-        # Extract keys that correspond with batch.
+        """Return a batch with training data and labels on bounding-box level."""
+        # Extract keys that correspond to batch.
         start_idx = idx * self.batch_size
         end_idx = min(len(self.keys), start_idx + self.batch_size)
         batch_keys = self.keys[start_idx:end_idx]
@@ -118,7 +118,8 @@ class WildlifeDataset(Sequence):
 
         # Extract labels
         if self.is_supervised:
-            labels = np.asarray([self.label_dict[key] for key in batch_keys])
+            batch_keys_stem = [key[: len(key) - 4] for key in batch_keys]
+            labels = np.asarray([self.label_dict[key] for key in batch_keys_stem])
         else:
             # We need to add a dummy for unsupervised case because TF.
             labels = np.empty(shape=self.batch_size, dtype=float)
