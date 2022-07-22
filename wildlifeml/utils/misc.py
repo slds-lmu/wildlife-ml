@@ -64,18 +64,19 @@ def truncate_float(x: float, precision: int = 3) -> float:
 
 def render_bbox(
     img: Image,
-    x_coords: Tuple[int, int],
-    y_coords: Tuple[int, int],
+    x_coords: List[Tuple[int, int]],
+    y_coords: List[Tuple[int, int]],
     outline: str = 'red',
     border_width: int = 10,
 ) -> Image:
     """Render a bounding box into a PIL Image."""
     img_draw = ImageDraw.Draw(img)
-    img_draw.rectangle(
-        xy=((x_coords[0], y_coords[0]), (x_coords[1], y_coords[1])),
-        outline=outline,
-        width=border_width,
-    )
+    for x, y in zip(x_coords, y_coords):
+        img_draw.rectangle(
+            xy=((x[0], y[0]), (x[1], y[1])),
+            outline=outline,
+            width=border_width,
+        )
     return img
 
 

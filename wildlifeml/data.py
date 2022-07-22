@@ -9,7 +9,6 @@ from typing import (
     Dict,
     Final,
     List,
-    Literal,
     Optional,
     Tuple,
 )
@@ -130,24 +129,37 @@ class WildlifeDataset(Sequence):
         return np.stack(imgs).astype(float), labels
 
 
-def append_dataset(dataset: WildlifeDataset, new_label_dict: Dict) -> WildlifeDataset:
-    """Clone a WildlifeDataset object and enrich with new images."""
-    new_keys = list(new_label_dict.keys())
-    if not all(x in dataset.detector_dict.keys() for x in new_keys):
-        raise ValueError('No Megadetector results found for provided keys.')
+def modify_dataset(
+    dataset: WildlifeDataset,
+    extend: bool = False,
+    keys: Optional[List[str]] = None,
+    new_label_dict: Optional[Dict] = None,
+) -> WildlifeDataset:
+    """Clone a WildlifeDataset object and extend or subset."""
+    if keys is None:
+        if new_label_dict is None:
+            raise IOError('You need to provide either keys or a label dictionary.')
+        keys = list(new_label_dict.keys())
+
     new_dataset = deepcopy(dataset)
-    new_dataset.set_keys(new_dataset.keys + new_keys)
-    new_dataset.label_dict.update(new_label_dict)
+    new_keys = keys + new_dataset.keys if extend else keys
+    new_dataset.set_keys(new_keys)
 
-    return new_dataset
+    if extend:
+        if not all(x in dataset.detector_dict.keys() for x in keys):
+            raise ValueError('No Megadetector results found for provided keys.')
+        if dataset.is_supervised:
+            if new_label_dict is None:
+                raise ValueError(
+                    'You are attempting to extend a supervised dataset. '
+                    'Please provide labels for keys to be appended.'
+                )
+            new_dataset.label_dict.update(new_label_dict)
 
-
-def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset:
-    """Clone a WildlifeDataset object and subset to given keys."""
-    if len(set.difference(set(keys), set(dataset.keys))) > 0:
-        raise ValueError('Provided keys must be a subset of dataset keys.')
-    new_dataset = deepcopy(dataset)
-    new_dataset.set_keys(keys)
+    else:
+        if not dataset.is_supervised and new_label_dict is not None:
+            new_dataset.label_dict.update(new_label_dict)
+            new_dataset.is_supervised = True
 
     return new_dataset
 
@@ -155,115 +167,115 @@ def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset
 # --------------------------------------------------------------------------------------
 
 
+def do_stratified_splitting(
+    detector_dict: Dict,
+    img_keys: List[str],
+    splits: Tuple[float, float, float],
+    meta_dict: Optional[Dict] = None,
+    random_state: Optional[int] = None,
+) -> Tuple[List[Any], ...]:
+    """Perform stratified holdout splitting."""
+    keys_array = np.array(img_keys)
+    if meta_dict is not None:
+        strat_dict = get_strat_dict(meta_dict)
+        strat_var_array = np.array([strat_dict[k] for k in img_keys])
+    else:
+        strat_dict = {}
+        strat_var_array = np.empty(len(keys_array))
+
+    # Split intro train and test keys
+    sss_tt = StratifiedShuffleSplit(
+        n_splits=1,
+        train_size=splits[0] + splits[1],
+        test_size=splits[2],
+        random_state=random_state,
+    )
+    idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
+    keys_train = img_keys[idx_train]
+    keys_test = img_keys[idx_test]
+    keys_val = []
+
+    if splits[1] > 0:
+        # Split train again into train and val
+        keys_array = np.array(keys_train)
+        if len(strat_dict) > 0:
+            strat_dict_train = {k: v for k, v in strat_dict.items() if k in keys_train}
+            strat_var_array = np.array([strat_dict_train[k] for k in keys_train])
+        else:
+            strat_var_array = np.empty(len(keys_array))
+        sss_tv = StratifiedShuffleSplit(
+            n_splits=1,
+            train_size=splits[0],
+            test_size=splits[1],
+            random_state=random_state,
+        )
+        idx_train, idx_val = next(iter(sss_tv.split(keys_array, strat_var_array)))
+        keys_train = keys_train[idx_train]
+        keys_val = keys_train[idx_val]
+
+    # Get keys on bbox level
+    keys_train = [map_img_to_bboxes(k, detector_dict) for k in keys_train]
+    keys_val = [map_img_to_bboxes(k, detector_dict) for k in keys_val]
+    keys_test = [map_img_to_bboxes(k, detector_dict) for k in keys_test]
+
+    return keys_train, keys_val, keys_test
+
+
 def do_stratified_cv(
-    label_file_path: str,
-    detector_file_path: str,
-    keys: List[str],
-    strategy: Literal['threeway', 'cv'],
-    splits: Optional[Tuple[float, float, float]],
+    detector_dict: Dict,
+    img_keys: List[str],
     folds: Optional[int],
-    stratifier: List,
+    meta_dict: Optional[Dict],
     random_state: Optional[int] = None,
 ) -> Tuple[List[Any], ...]:
     """Perform stratified cross-validation."""
-    keys_img = list(set([k[: len(k) - BBOX_SUFFIX_LEN] for k in keys]))
-
-    label_dict = {k: v for k, v in load_csv(label_file_path) if k in keys_img}
-    detector_dict = {k: v for k, v in load_json(detector_file_path) if k in keys}
-    strat_var = get_strat_var(stratifier)
-    keys_array = np.array(list(label_dict.keys()))
-    strat_var_array = np.array(strat_var)
-
-    if strategy == 'threeway':
-        if splits is None:
-            raise ValueError('Please provide split ratio for three-way splitting.')
-
-        # Split intro train and test keys
-        sss_tt = StratifiedShuffleSplit(
-            n_splits=1,
-            train_size=splits[0] + splits[1],
-            test_size=splits[2],
-            random_state=random_state,
-        )
-        idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
-        keys_train = keys_img[idx_train]
-        keys_test = keys_img[idx_test]
-        keys_val = ['']
-
-        if splits[1] > 0:
-
-            # Split train again into train and val
-            stratifier_train = []
-            for i in range(len(stratifier)):
-                stratifier_train.append(stratifier[i][idx_train])
-            keys_array = np.array(keys_train)
-            strat_var_array = np.array(get_strat_var(stratifier_train))
-            sss_tv = StratifiedShuffleSplit(
-                n_splits=1,
-                train_size=splits[0],
-                test_size=splits[1],
-                random_state=random_state,
-            )
-            idx_train, idx_val = next(iter(sss_tv.split(keys_array, strat_var_array)))
-            keys_train = keys_train[idx_train]
-            keys_val = keys_train[idx_val]
-
-        # Get keys on bbox level
-        keys_train = rematch_keys(keys_train, detector_dict)
-        keys_val = rematch_keys(keys_val, detector_dict)
-        keys_test = rematch_keys(keys_test, detector_dict)
-
-        return keys_train, keys_val, keys_test
-
-    elif strategy == 'cv':
-
-        if folds is None:
-            raise ValueError('Please provide number of folds in cross-validation.')
-
-        # Get k train-test splits
-        skf = StratifiedKFold(n_splits=folds, random_state=random_state)
-        idx_train = [list(i) for i, _ in skf.split(keys_array, np.array(strat_var))]
-        idx_test = [list(j) for _, j in skf.split(keys_array, np.array(strat_var))]
-        keys_train = [keys_img[i] for i in idx_train]
-        keys_test = [keys_img[i] for i in idx_test]
-
-        # Get keys on bbox level
-        keys_train = [rematch_keys(i, detector_dict) for i in keys_train]
-        keys_test = [rematch_keys(i, detector_dict) for i in keys_test]
-
-        return keys_train, keys_test
-
+    keys_array = np.array(img_keys)
+    if meta_dict is not None:
+        strat_dict = get_strat_dict(meta_dict)
+        strat_var_array = np.array([strat_dict[k] for k in img_keys])
     else:
-        raise ValueError(f'Strategy "{strategy} not implemented.')
+        strat_var_array = np.empty(len(keys_array))
+
+    if folds is None:
+        raise ValueError('Please provide number of folds in cross-validation.')
+
+    # Get k train-test splits
+    skf = StratifiedKFold(n_splits=folds, random_state=random_state)
+    idx_train = [list(i) for i, _ in skf.split(keys_array, strat_var_array)]
+    idx_test = [list(j) for _, j in skf.split(keys_array, strat_var_array)]
+    keys_train, keys_test = [], []
+    for i, _ in enumerate(idx_train):
+        slice_keys = img_keys[np.array(idx_train[i])]
+        keys_train.append([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
+    for i, _ in enumerate(idx_test):
+        slice_keys = img_keys[np.array(idx_test[i])]
+        keys_test.append([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
+
+    return keys_train, keys_test
 
 
-def get_strat_var(stratification_vars: List) -> Any:
+def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
     """Create stratifying variable for dataset splitting."""
-    if len(stratification_vars) == 0:
-        return None
+    if len(meta_dict) == 0:
+        return {}
 
     else:
-        lengths = [len(x) for x in stratification_vars]
+        lengths = [len(v) for v in meta_dict.values()]
         if len(set(lengths)) > 1:
             raise ValueError(
                 'All variables provided for stratification must have the same number '
                 'of elements.'
             )
-        stratifier = []
-        for i in range(set(lengths).pop()):
-            strat_var_concat = '_'.join(
-                str(stratification_vars[i][j]) for j in range(len(stratification_vars))
-            )
-            stratifier.append(strat_var_concat)
-        return stratifier
+        strat_dict = {
+            k: '_'.join([str(v) for v in meta_dict[k].values()])
+            for k in meta_dict.keys()
+        }
+        return strat_dict
 
 
-def rematch_keys(img_keys: List[str], detector_dict: Dict) -> List[str]:
-    """Find all bbox-level keys for img_keys."""
-    bbox_keys = []
-    for i in img_keys:
-        bbox_keys.extend([k for k in detector_dict.keys() if i in k])
-    return bbox_keys
+def map_img_to_bboxes(img_key: str, detector_dict: Dict) -> List[str]:
+    """Find all bbox-level keys for img key."""
+    return [k for k in detector_dict.keys() if img_key in k]
 
 
 # --------------------------------------------------------------------------------------

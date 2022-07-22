@@ -4,6 +4,7 @@ import random
 from typing import (
     Dict,
     List,
+    Literal,
     Optional,
 )
 
@@ -17,9 +18,10 @@ from sklearn.metrics import (
 
 from wildlifeml.data import (
     WildlifeDataset,
-    append_dataset,
-    do_train_split,
-    subset_dataset,
+    do_stratified_cv,
+    do_stratified_splitting,
+    map_img_to_bboxes,
+    modify_dataset,
 )
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
@@ -42,8 +44,7 @@ class ActiveLearner:
     def __init__(
         self,
         trainer: WildlifeTrainer,
-        train_dataset: WildlifeDataset,
-        val_dataset: WildlifeDataset,
+        strategy: Literal['holdout', 'cv'],
         pool_dataset: WildlifeDataset,
         label_file_path: str,
         al_batch_size: int = 10,
@@ -51,30 +52,39 @@ class ActiveLearner:
         acquisitor_name: str = 'random',
         start_fresh: bool = True,
         start_keys: List[str] = None,
+        train_size: Optional[float] = None,
+        folds: Optional[int] = None,
         test_dataset: Optional[WildlifeDataset] = None,
         test_logfile_path: Optional[str] = None,
+        meta_dict: Optional[Dict] = None,
         state_cache: str = '.activecache.json',
         random_state: Optional[int] = None,
     ) -> None:
         """Instantiate an ActiveLearner object."""
         self.pool_dataset = pool_dataset
+        self.labeled_dataset = WildlifeDataset(
+            keys=[],
+            image_dir='',
+            detector_file_path='',
+            batch_size=0,
+        )
         self.dir_img = self.pool_dataset.img_dir
         self.dir_act = active_directory
 
         self.trainer = trainer
-
-        self.train_dataset = train_dataset
-        self.val_dataset = val_dataset
         self.label_file_path = label_file_path
+        self.strategy = strategy
+        self.train_size = train_size
+        self.folds = folds
+
+        self.test_dataset = test_dataset
+        self.test_logfile_path = test_logfile_path
 
         self.acquisitor = AcquisitorFactory.get(
             acquisitor_name, top_k=al_batch_size, random_state=random_state
         )
-        self.test_dataset = test_dataset
-        self.test_logfile_path = test_logfile_path
         self.al_batch_size = al_batch_size
         self.random_state = random_state
-
         self.state_cache_file = state_cache
         self.do_fresh_start = start_fresh
         self.start_keys = start_keys
@@ -83,6 +93,10 @@ class ActiveLearner:
         self.active_labels: Dict[str, float] = {}
         # Count active learning iterations
         self.active_counter = 0
+
+        # Build train and val data for trainer
+        self.train_size = train_size
+        self.meta_dict = meta_dict
 
     def run(self) -> None:
         """Trigger Active Learning process."""
@@ -161,6 +175,7 @@ class ActiveLearner:
             self.dir_act = state['active_directory']
             self.random_state = state['random_state']
             self.active_labels = state['active_labels']
+            self.labeled_dataset = state['labeled_dataset']
             self.active_counter = state['active_counter']
             self.active_counter += 1
 
@@ -185,6 +200,7 @@ class ActiveLearner:
             'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
             'active_labels': self.active_labels,
+            'labeled_dataset': self.labeled_dataset,
             'active_counter': self.active_counter,
         }
         save_as_json(state, self.state_cache_file)
@@ -198,17 +214,21 @@ class ActiveLearner:
         `images` and the `active_labels.csv` contains a template for adding labels.
         """
         target_path = os.path.join(self.dir_act, 'images')
+        keys_img = list(set([k[: len(k) - 4] for k in keys]))
 
-        for key in keys:
-            entry = self.pool_dataset.detector_dict[key]
-            img = load_image(entry['file'])
+        for key in keys_img:
+            bbox_keys = map_img_to_bboxes(key, self.pool_dataset.detector_dict)
+            first_entry = self.pool_dataset.detector_dict[bbox_keys[0]]
+            img = load_image(first_entry['file'])
             width, height = img.size
-
-            x_coords, y_coords = Cropper.get_absolute_coords(
-                entry['detections'][0]['bbox'], (height, width)
-            )
+            x_coords, y_coords = [], []
+            for bkey in bbox_keys:
+                x, y = Cropper.get_absolute_coords(
+                    self.pool_dataset.detector_dict[bkey].get('bbox'), (height, width)
+                )
+                x_coords.append(x)
+                y_coords.append(y)
             img = render_bbox(img, x_coords, y_coords)
-
             img.save(os.path.join(target_path, key))
 
         label_template = [(key, '') for key in keys]
@@ -244,7 +264,7 @@ class ActiveLearner:
 
         # Check whether label type is valid
         set_labels_supplied = set(labels_supplied.values())
-        set_labels_train = set(self.train_dataset.label_dict.values())
+        set_labels_train = set(self.active_labels.values())
         unknown_labels = set.difference(set_labels_supplied, set_labels_train)
         if len(unknown_labels) > 0:
             print(
@@ -252,32 +272,8 @@ class ActiveLearner:
                 f'which have so far not been part of the training data.'
             )
 
-        # Update datasets (add new instances to train and validation data in constant
-        # proportion; remove them from pool dataset)
-        # TODO think about stratification here (at least by class)
-        n_t = len(self.train_dataset.keys)
-        n_v = len(self.val_dataset.keys)
-        train_keys, _, val_keys = do_train_split(
-            label_file_path=os.path.join(self.dir_act, 'active_labels.csv'),
-            splits=(n_t / (n_t + n_v), 0, n_v / (n_t + n_v)),
-            strategy='random',
-            random_state=self.random_state,
-        )
-        self.train_dataset = append_dataset(
-            dataset=self.train_dataset,
-            new_label_dict={
-                k: v for k, v in labels_supplied.items() if k in train_keys
-            },
-        )
-        self.val_dataset = append_dataset(
-            dataset=self.train_dataset,
-            new_label_dict={k: v for k, v in labels_supplied.items() if k in val_keys},
-        )
-        self.pool_dataset = subset_dataset(
-            dataset=self.pool_dataset,
-            keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
-        )
-        # Update label file
+        # Update label dict and file
+        self.active_labels.update(labels_supplied)
         labels_existing = {
             key: float(value) for key, value in load_csv(self.label_file_path)
         }
@@ -287,6 +283,17 @@ class ActiveLearner:
             target=self.label_file_path,
         )
 
+        # Update pool and labeled datasets
+        self.labeled_dataset = modify_dataset(
+            dataset=self.pool_dataset,
+            new_label_dict=labels_supplied,
+        )
+        self.pool_dataset = modify_dataset(
+            dataset=self.pool_dataset,
+            keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
+            extend=False,
+        )
+
         # Wipe staging area
         for f in os.listdir(os.path.join(self.dir_act, 'images')):
             os.remove(os.path.join(self.dir_act, 'images', f))
@@ -294,8 +301,58 @@ class ActiveLearner:
 
     def fit(self) -> None:
         """Fit the model with active data."""
-        self.trainer.reset_model()
-        self.trainer.fit(self.train_dataset, self.val_dataset)
+        # Get new train and val sets
+        meta_dict = self.meta_dict if self.meta_dict is not None else self.active_labels
+
+        if self.strategy == 'holdout':
+            if self.train_size is not None:
+                keys_train, _, keys_val = do_stratified_splitting(
+                    detector_dict=self.pool_dataset.detector_dict,
+                    img_keys=list(self.active_labels.keys()),
+                    splits=(self.train_size, 0.0, 1 - self.train_size),
+                    random_state=self.random_state,
+                    meta_dict=meta_dict,
+                )
+            else:
+                raise IOError(
+                    'Using holdout splitting requires specification of train set size.'
+                )
+            train_dataset = modify_dataset(
+                dataset=self.labeled_dataset,
+                keys=keys_train,
+                extend=False,
+            )
+            val_dataset = modify_dataset(
+                dataset=self.labeled_dataset,
+                keys=keys_val,
+                extend=False,
+            )
+            self.trainer.reset_model()
+            self.trainer.fit(train_dataset, val_dataset)
+
+        elif self.strategy == 'cv':
+            keys_train, keys_val = do_stratified_cv(
+                detector_dict=self.pool_dataset.detector_dict,
+                img_keys=list(self.active_labels.keys()),
+                folds=self.folds,
+                random_state=self.random_state,
+                meta_dict=meta_dict,
+            )
+            models = []
+            for k, _ in enumerate(keys_train):
+                self.trainer.reset_model()
+                train_dataset = modify_dataset(
+                    dataset=self.labeled_dataset,
+                    keys=keys_train[k],
+                    extend=False,
+                )
+                val_dataset = modify_dataset(
+                    dataset=self.labeled_dataset,
+                    keys=keys_val[k],
+                    extend=False,
+                )
+                models.append(self.trainer.fit(train_dataset, val_dataset))
+                # TODO think about that, doesn't make much sense
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
