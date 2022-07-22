@@ -1,6 +1,7 @@
 """Classes and functions for Active Learning."""
 import os
 import random
+from collections import Counter
 from typing import (
     Dict,
     List,
@@ -20,11 +21,13 @@ from wildlifeml.data import (
     WildlifeDataset,
     do_stratified_cv,
     do_stratified_splitting,
+    map_bbox_to_img,
     map_img_to_bboxes,
     modify_dataset,
 )
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
+from wildlifeml.training.evaluator import Evaluator
 from wildlifeml.training.trainer import WildlifeTrainer
 from wildlifeml.utils.io import (
     load_csv,
@@ -89,14 +92,16 @@ class ActiveLearner:
         self.do_fresh_start = start_fresh
         self.start_keys = start_keys
 
+        self.train_size = train_size
+        self.meta_dict = meta_dict
+
         # Serves as storage for all active keys and labels.
         self.active_labels: Dict[str, float] = {}
         # Count active learning iterations
         self.active_counter = 0
 
-        # Build train and val data for trainer
-        self.train_size = train_size
-        self.meta_dict = meta_dict
+        # Set up evaluator
+        self.evaluator = Evaluator()
 
     def run(self) -> None:
         """Trigger Active Learning process."""
@@ -238,7 +243,10 @@ class ActiveLearner:
 
         print(
             f'A selection of images is now waiting in "{self.dir_act}" for your '
-            f'labeling expertise!\nRerun the program when you are done.'
+            f'labeling expertise! \nPlease provide class labels in integer format.'
+            f'\n Special cases: please use the label "-1" for empty images and the '
+            f'label "-2" for images with more than one animal species present.'
+            f'\nRerun the program when you are done.'
         )
 
     def collect(self) -> None:
@@ -268,7 +276,7 @@ class ActiveLearner:
         unknown_labels = set.difference(set_labels_supplied, set_labels_train)
         if len(unknown_labels) > 0:
             print(
-                f'Please note: Your supplied labels contain classes "{unknown_labels}" '
+                f'Please note: your supplied labels contain classes "{unknown_labels}" '
                 f'which have so far not been part of the training data.'
             )
 
@@ -283,10 +291,10 @@ class ActiveLearner:
             target=self.label_file_path,
         )
 
-        # Update pool and labeled datasets
+        # Update pool and labeled datasets, omitting mixed-class imgs for training
         self.labeled_dataset = modify_dataset(
             dataset=self.pool_dataset,
-            new_label_dict=labels_supplied,
+            new_label_dict={k: v for k, v in labels_supplied.items() if v != -2},
         )
         self.pool_dataset = modify_dataset(
             dataset=self.pool_dataset,
@@ -314,9 +322,7 @@ class ActiveLearner:
                     meta_dict=meta_dict,
                 )
             else:
-                raise IOError(
-                    'Using holdout splitting requires specification of train set size.'
-                )
+                raise IOError('Using holdout splitting requires input for train size.')
             train_dataset = modify_dataset(
                 dataset=self.labeled_dataset,
                 keys=keys_train,
@@ -331,6 +337,7 @@ class ActiveLearner:
             self.trainer.fit(train_dataset, val_dataset)
 
         elif self.strategy == 'cv':
+            # TODO think about that, does that make sense?!
             keys_train, keys_val = do_stratified_cv(
                 detector_dict=self.pool_dataset.detector_dict,
                 img_keys=list(self.active_labels.keys()),
@@ -352,7 +359,6 @@ class ActiveLearner:
                     extend=False,
                 )
                 models.append(self.trainer.fit(train_dataset, val_dataset))
-                # TODO think about that, doesn't make much sense
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
@@ -405,6 +411,39 @@ class ActiveLearner:
                 logfile.update({f'iteration {self.active_counter}': results})
                 save_as_pickle(logfile, self.test_logfile_path)
 
-    def predict(self, dataset: WildlifeDataset) -> np.ndarray:
+    def predict(self, dataset: WildlifeDataset) -> Dict[str, float]:
         """Obtain predictions for a list of keys."""
-        return self.trainer.predict(dataset)
+        return dict(zip(dataset.keys, self.trainer.predict(dataset)))
+
+    @staticmethod
+    # TODO rewrite, this makes only sense for hard labels!
+    # TODO Also think about outsourcing, Evaluator might also need it
+    def map_preds_to_img(
+        dataset: WildlifeDataset,
+        preds_bboxes: Dict[str, float],
+        detector_dict: Dict,
+    ) -> Dict[str, int]:
+        """Map predictions on bbox level back to img level."""
+        keys_imgs = list(set([map_bbox_to_img(k) for k in preds_bboxes.keys()]))
+        preds_imgs = {}
+
+        for key in keys_imgs:
+            keys_k = map_img_to_bboxes(key, detector_dict)
+            preds_k = {k: preds_bboxes[k] for k in keys_k}
+            # Map bbox predictions to img through case-by-case analysis
+            cnt = Counter(preds_k.values())
+            if len(cnt) == 1:
+                pred = set(cnt.values()).pop()
+            # Remove 'empty' predictions (img only classified as 'empty' if all
+            # bbox predictions agree)
+            preds_k = {k: v for k, v in preds_k.items() if v != -1}
+            cnt = Counter(preds_k.values())
+            # Pick most common class or assign 'mixed' in case of ties
+            vals, freqs = cnt.most_common()
+            if len(vals) == 1 or freqs[0] > freqs[1]:
+                pred = int(vals[0])
+            else:
+                pred = -1
+            preds_imgs.update({key: pred})
+
+        return preds_imgs

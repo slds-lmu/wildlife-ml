@@ -120,7 +120,7 @@ class WildlifeDataset(Sequence):
 
         # Extract labels
         if self.is_supervised:
-            batch_keys_stem = [key[: len(key) - BBOX_SUFFIX_LEN] for key in batch_keys]
+            batch_keys_stem = [map_bbox_to_img(key) for key in batch_keys]
             labels = np.asarray([self.label_dict[key] for key in batch_keys_stem])
         else:
             # We need to add a dummy for unsupervised case because TF.
@@ -162,6 +162,16 @@ def modify_dataset(
             new_dataset.is_supervised = True
 
     return new_dataset
+
+
+def map_img_to_bboxes(img_key: str, detector_dict: Dict) -> List[str]:
+    """Find all bbox-level keys for img key."""
+    return [k for k in detector_dict.keys() if img_key in k]
+
+
+def map_bbox_to_img(bbox_key: str) -> str:
+    """Find img key for bbox-level key."""
+    return bbox_key[: len(bbox_key) - BBOX_SUFFIX_LEN]
 
 
 # --------------------------------------------------------------------------------------
@@ -271,11 +281,6 @@ def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
             for k in meta_dict.keys()
         }
         return strat_dict
-
-
-def map_img_to_bboxes(img_key: str, detector_dict: Dict) -> List[str]:
-    """Find all bbox-level keys for img key."""
-    return [k for k in detector_dict.keys() if img_key in k]
 
 
 # --------------------------------------------------------------------------------------
