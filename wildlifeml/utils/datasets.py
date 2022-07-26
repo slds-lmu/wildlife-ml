@@ -71,9 +71,10 @@ def do_stratified_splitting(
         test_size=splits[2],
         random_state=random_state,
     )
+    print('---> Performing stratified split')
     idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
-    keys_train = np.array(img_keys)[idx_train].tolist()
-    keys_test = np.array(img_keys)[idx_test].tolist()
+    keys_train = keys_array[idx_train].tolist()
+    keys_test = keys_array[idx_test].tolist()
     keys_val = []
 
     if splits[1] > 0:
@@ -91,10 +92,11 @@ def do_stratified_splitting(
             random_state=random_state,
         )
         idx_train, idx_val = next(iter(sss_tv.split(keys_array, strat_var_array)))
-        keys_train = np.array(keys_train)[idx_train].tolist()
-        keys_val = np.array(keys_train)[idx_val].tolist()
+        keys_train = keys_array[idx_train].tolist()
+        keys_val = keys_array[idx_val].tolist()
 
     # Get keys on bbox level
+    print('---> Mapping image keys to bbox keys')
     keys_train = [map_img_to_bboxes(k, detector_dict) for k in keys_train]
     keys_val = [map_img_to_bboxes(k, detector_dict) for k in keys_val]
     keys_test = [map_img_to_bboxes(k, detector_dict) for k in keys_test]
@@ -122,14 +124,16 @@ def do_stratified_cv(
 
     # Get k train-test splits
     skf = StratifiedKFold(n_splits=folds, random_state=random_state)
+    print('---> Performing stratified splits')
     idx_train = [list(i) for i, _ in skf.split(keys_array, strat_var_array)]
     idx_test = [list(j) for _, j in skf.split(keys_array, strat_var_array)]
     keys_train, keys_test = [], []
+    print('---> Mapping image keys to bbox keys')
     for i, _ in enumerate(idx_train):
-        slice_keys = np.array(img_keys)[idx_train[i]].tolist()
+        slice_keys = keys_array[idx_train[i]].tolist()
         keys_train.append([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
     for i, _ in enumerate(idx_test):
-        slice_keys = np.array(img_keys)[idx_test[i]].tolist()
+        slice_keys = keys_array[idx_test[i]].tolist()
         keys_test.append([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
 
     return keys_train, keys_test
