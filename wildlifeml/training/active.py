@@ -101,7 +101,7 @@ class ActiveLearner:
         self.active_counter = 0
 
         # Set up evaluator
-        self.evaluator = Evaluator()
+        self.evaluator = Evaluator(['acc'])
 
     def run(self) -> None:
         """Trigger Active Learning process."""
