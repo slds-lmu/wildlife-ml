@@ -72,8 +72,8 @@ def do_stratified_splitting(
         random_state=random_state,
     )
     idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
-    keys_train = img_keys[np.array(idx_train)]
-    keys_test = img_keys[np.array(idx_test)]
+    keys_train = np.array(img_keys)[idx_train].tolist()
+    keys_test = np.array(img_keys)[idx_test].tolist()
     keys_val = []
 
     if splits[1] > 0:
@@ -91,8 +91,8 @@ def do_stratified_splitting(
             random_state=random_state,
         )
         idx_train, idx_val = next(iter(sss_tv.split(keys_array, strat_var_array)))
-        keys_train = keys_train[idx_train]
-        keys_val = keys_train[idx_val]
+        keys_train = np.array(keys_train)[idx_train].tolist()
+        keys_val = np.array(keys_train)[idx_val].tolist()
 
     # Get keys on bbox level
     keys_train = [map_img_to_bboxes(k, detector_dict) for k in keys_train]
@@ -126,10 +126,10 @@ def do_stratified_cv(
     idx_test = [list(j) for _, j in skf.split(keys_array, strat_var_array)]
     keys_train, keys_test = [], []
     for i, _ in enumerate(idx_train):
-        slice_keys = img_keys[np.array(idx_train[i])]
+        slice_keys = np.array(img_keys)[idx_train[i]].tolist()
         keys_train.append([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
     for i, _ in enumerate(idx_test):
-        slice_keys = img_keys[np.array(idx_test[i])]
+        slice_keys = np.array(img_keys)[idx_test[i]].tolist()
         keys_test.append([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
 
     return keys_train, keys_test
