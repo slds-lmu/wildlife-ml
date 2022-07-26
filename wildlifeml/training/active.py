@@ -133,7 +133,7 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
-        preds = dict(zip(self.pool_dataset.keys, self.predict(self.pool_dataset)))
+        preds = self.predict(self.pool_dataset)
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
@@ -150,9 +150,17 @@ class ActiveLearner:
             if 'y' not in input().lower():
                 print('Active Learning setup is aborted.')
                 exit()
+            else:
+                os.remove(self.state_cache_file)
 
         os.makedirs(self.dir_act, exist_ok=True)
         os.makedirs(os.path.join(self.dir_act, 'images'), exist_ok=True)
+
+        # Remove old log file
+        if self.test_logfile_path is not None and os.path.exists(
+            self.test_logfile_path
+        ):
+            os.remove(self.test_logfile_path)
 
         if self.start_keys is None:
             print(
@@ -267,8 +275,10 @@ class ActiveLearner:
                 }
             )
         except IOError:
-            'There is a problem with your label file.'
-            'Make sure you have supplied a label for every entry.'
+            print(
+                'There is a problem with your label file.'
+                'Make sure you have supplied a label for every entry.'
+            )
 
         # Check whether label type is valid
         set_labels_supplied = set(labels_supplied.values())
@@ -362,6 +372,10 @@ class ActiveLearner:
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
+        if self.test_dataset is None:
+            print('No test dataset was specified. Evaluation is skipped.')
+            return
+
         logfile = {}
         if self.test_logfile_path is not None and os.path.exists(
             self.test_logfile_path
@@ -376,40 +390,39 @@ class ActiveLearner:
                 self.trainer.model.evaluate(self.test_dataset),
             )
         )
-        if self.test_dataset is not None:
-            y_true = np.array(
-                [
-                    value
-                    for key, value in self.test_dataset.label_dict.items()
-                    if key in self.test_dataset.keys
-                ]
-            )
-            preds = self.predict(self.test_dataset)
-            y_pred = np.argmax(preds, axis=1)
-            acc = accuracy_score(y_true=y_true, y_pred=y_pred)
-            prec = precision_score(
-                y_true=y_true,
-                y_pred=y_pred,
-                average='macro',
-                zero_division=0,
-            )
-            rec = recall_score(
-                y_true=y_true,
-                y_pred=y_pred,
-                average='macro',
-                zero_division=0,
-            )
-            custom_metrics = {
-                'accuracy_skl': acc,
-                'precision': prec,
-                'recall': rec,
-                'confusion_matrix': confusion_matrix(y_true=y_true, y_pred=y_pred),
-            }
-            results = dict(keras_metrics, **custom_metrics)
-            print(f'accuracy: {acc:.3f}, precision: {prec:.3f}, recall: {rec:.3f}')
-            if self.test_logfile_path is not None:
-                logfile.update({f'iteration {self.active_counter}': results})
-                save_as_pickle(logfile, self.test_logfile_path)
+        y_true = np.array(
+            [
+                value
+                for key, value in self.test_dataset.label_dict.items()
+                if key in self.test_dataset.keys
+            ]
+        )
+        preds = self.predict(self.test_dataset)
+        y_pred = np.argmax(preds, axis=1)
+        acc = accuracy_score(y_true=y_true, y_pred=y_pred)
+        prec = precision_score(
+            y_true=y_true,
+            y_pred=y_pred,
+            average='macro',
+            zero_division=0,
+        )
+        rec = recall_score(
+            y_true=y_true,
+            y_pred=y_pred,
+            average='macro',
+            zero_division=0,
+        )
+        custom_metrics = {
+            'accuracy_skl': acc,
+            'precision': prec,
+            'recall': rec,
+            'confusion_matrix': confusion_matrix(y_true=y_true, y_pred=y_pred),
+        }
+        results = dict(keras_metrics, **custom_metrics)
+        print(f'accuracy: {acc:.3f}, precision: {prec:.3f}, recall: {rec:.3f}')
+        if self.test_logfile_path is not None:
+            logfile.update({f'iteration {self.active_counter}': results})
+            save_as_pickle(logfile, self.test_logfile_path)
 
     def predict(self, dataset: WildlifeDataset) -> Dict[str, float]:
         """Obtain predictions for a list of keys."""
