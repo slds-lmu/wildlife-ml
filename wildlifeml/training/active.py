@@ -16,17 +16,17 @@ from sklearn.metrics import (
     recall_score,
 )
 
-from wildlifeml.data import (
-    WildlifeDataset,
-    do_stratified_cv,
-    do_stratified_splitting,
-    map_img_to_bboxes,
-    modify_dataset,
-)
+from wildlifeml.data import WildlifeDataset, modify_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
 from wildlifeml.training.evaluator import Evaluator
 from wildlifeml.training.trainer import WildlifeTrainer
+from wildlifeml.utils.datasets import (
+    do_stratified_cv,
+    do_stratified_splitting,
+    map_img_to_bboxes,
+    render_bbox,
+)
 from wildlifeml.utils.io import (
     load_csv,
     load_image,
@@ -36,7 +36,6 @@ from wildlifeml.utils.io import (
     save_as_json,
     save_as_pickle,
 )
-from wildlifeml.utils.misc import render_bbox
 
 
 class ActiveLearner:
