@@ -2,6 +2,7 @@
 import math
 import os
 from typing import (
+    Dict,
     List,
     Optional,
     Tuple,
@@ -11,6 +12,7 @@ from urllib import request
 import numpy as np
 from PIL import Image, ImageDraw
 
+from wildlifeml.data import map_bbox_to_img, map_img_to_bboxes
 from wildlifeml.utils.io import load_json
 
 
@@ -99,3 +101,23 @@ def separate_empties(
         )
     keys_nonempty = list(set(detector_dict.keys()) - set(keys_empty))
     return keys_empty, keys_nonempty
+
+
+def map_preds_to_img(
+    preds_bboxes: Dict[str, float],
+    detector_dict: Dict,
+) -> Dict[str, int]:
+    """Map predictions on bbox level back to img level."""
+    keys_imgs = list(set([map_bbox_to_img(k) for k in preds_bboxes.keys()]))
+    preds_imgs = {}
+
+    for key in keys_imgs:
+        # Find all bbox predictions for img
+        keys_k = map_img_to_bboxes(key, detector_dict)
+        preds_k = [preds_bboxes[k] for k in keys_k]
+        weights_k = [detector_dict[k].get('conf') for k in keys_k]
+        weights_k_normalized = [i / sum(weights_k) for i in weights_k]
+        pred = sum([i * j for i, j in zip(weights_k_normalized, preds_k)])
+        preds_imgs.update({key: pred})
+
+    return preds_imgs

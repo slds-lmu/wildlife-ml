@@ -1,7 +1,6 @@
 """Classes and functions for Active Learning."""
 import os
 import random
-from collections import Counter
 from typing import (
     Dict,
     List,
@@ -21,7 +20,6 @@ from wildlifeml.data import (
     WildlifeDataset,
     do_stratified_cv,
     do_stratified_splitting,
-    map_bbox_to_img,
     map_img_to_bboxes,
     modify_dataset,
 )
@@ -427,36 +425,3 @@ class ActiveLearner:
     def predict(self, dataset: WildlifeDataset) -> Dict[str, float]:
         """Obtain predictions for a list of keys."""
         return dict(zip(dataset.keys, self.trainer.predict(dataset)))
-
-    @staticmethod
-    # TODO rewrite, this makes only sense for hard labels!
-    # TODO Also think about outsourcing, Evaluator might also need it
-    def map_preds_to_img(
-        dataset: WildlifeDataset,
-        preds_bboxes: Dict[str, float],
-        detector_dict: Dict,
-    ) -> Dict[str, int]:
-        """Map predictions on bbox level back to img level."""
-        keys_imgs = list(set([map_bbox_to_img(k) for k in preds_bboxes.keys()]))
-        preds_imgs = {}
-
-        for key in keys_imgs:
-            keys_k = map_img_to_bboxes(key, detector_dict)
-            preds_k = {k: preds_bboxes[k] for k in keys_k}
-            # Map bbox predictions to img through case-by-case analysis
-            cnt = Counter(preds_k.values())
-            if len(cnt) == 1:
-                pred = set(cnt.values()).pop()
-            # Remove 'empty' predictions (img only classified as 'empty' if all
-            # bbox predictions agree)
-            preds_k = {k: v for k, v in preds_k.items() if v != -1}
-            cnt = Counter(preds_k.values())
-            # Pick most common class or assign 'mixed' in case of ties
-            vals, freqs = cnt.most_common()
-            if len(vals) == 1 or freqs[0] > freqs[1]:
-                pred = int(vals[0])
-            else:
-                pred = -1
-            preds_imgs.update({key: pred})
-
-        return preds_imgs
