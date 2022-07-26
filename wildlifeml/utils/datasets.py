@@ -72,8 +72,8 @@ def do_stratified_splitting(
         random_state=random_state,
     )
     idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
-    keys_train = img_keys[idx_train]
-    keys_test = img_keys[idx_test]
+    keys_train = img_keys[np.array(idx_train)]
+    keys_test = img_keys[np.array(idx_test)]
     keys_val = []
 
     if splits[1] > 0:
