@@ -24,7 +24,6 @@ from wildlifeml.training.trainer import WildlifeTrainer
 from wildlifeml.utils.datasets import (
     do_stratified_cv,
     do_stratified_splitting,
-    map_img_to_bboxes,
     render_bbox,
 )
 from wildlifeml.utils.io import (
@@ -66,6 +65,7 @@ class ActiveLearner:
             keys=[],
             image_dir='',
             detector_file_path='',
+            bbox_mapping_file_path='',
             batch_size=0,
         )
         self.dir_img = self.pool_dataset.img_dir
@@ -227,7 +227,7 @@ class ActiveLearner:
         keys_img = list(set([k[: len(k) - 4] for k in keys]))
 
         for key in keys_img:
-            bbox_keys = map_img_to_bboxes(key, self.pool_dataset.detector_dict)
+            bbox_keys = self.pool_dataset.mapping_dict[key]
             first_entry = self.pool_dataset.detector_dict[bbox_keys[0]]
             img = load_image(first_entry['file'])
             width, height = img.size
@@ -322,7 +322,7 @@ class ActiveLearner:
         if self.strategy == 'holdout':
             if self.train_size is not None:
                 keys_train, _, keys_val = do_stratified_splitting(
-                    detector_dict=self.pool_dataset.detector_dict,
+                    mapping_dict=self.pool_dataset.mapping_dict,
                     img_keys=list(self.active_labels.keys()),
                     splits=(self.train_size, 0.0, 1 - self.train_size),
                     random_state=self.random_state,
@@ -346,7 +346,7 @@ class ActiveLearner:
         elif self.strategy == 'cv':
             # TODO think about that, does that make sense?!
             keys_train, keys_val = do_stratified_cv(
-                detector_dict=self.pool_dataset.detector_dict,
+                mapping_dict=self.pool_dataset.mapping_dict,
                 img_keys=list(self.active_labels.keys()),
                 folds=self.folds,
                 random_state=self.random_state,

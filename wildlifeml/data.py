@@ -41,6 +41,7 @@ class WildlifeDataset(Sequence):
         image_dir: str,
         detector_file_path: str,
         batch_size: int,
+        bbox_mapping_file_path: str,
         label_file_path: Optional[str] = None,
         shuffle: bool = True,
         resolution: int = 224,
@@ -63,6 +64,7 @@ class WildlifeDataset(Sequence):
             self.label_dict = {}
 
         self.detector_dict = load_json(detector_file_path)
+        self.mapping_dict = load_json(bbox_mapping_file_path)
 
         self.batch_size = batch_size
         self.shuffle = shuffle

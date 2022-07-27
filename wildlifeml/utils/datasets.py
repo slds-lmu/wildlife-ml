@@ -36,11 +36,6 @@ def render_bbox(
     return img
 
 
-def map_img_to_bboxes(img_key: str, detector_dict: Dict) -> List[str]:
-    """Find all bbox-level keys for img key."""
-    return [k for k in detector_dict.keys() if img_key in k]
-
-
 def map_bbox_to_img(bbox_key: str) -> str:
     """Find img key for bbox-level key."""
     return bbox_key[: len(bbox_key) - BBOX_SUFFIX_LEN]
@@ -50,7 +45,7 @@ def map_bbox_to_img(bbox_key: str) -> str:
 
 
 def do_stratified_splitting(
-    detector_dict: Dict,
+    mapping_dict: Dict,
     img_keys: List[str],
     splits: Tuple[float, float, float],
     meta_dict: Optional[Dict] = None,
@@ -98,15 +93,15 @@ def do_stratified_splitting(
 
     # Get keys on bbox level
     print('---> Mapping image keys to bbox keys')
-    keys_train = [map_img_to_bboxes(k, detector_dict) for k in keys_train]
-    keys_val = [map_img_to_bboxes(k, detector_dict) for k in keys_val]
-    keys_test = [map_img_to_bboxes(k, detector_dict) for k in keys_test]
+    keys_train = [mapping_dict[k] for k in keys_train]
+    keys_val = [mapping_dict[k] for k in keys_val]
+    keys_test = [mapping_dict[k] for k in keys_test]
 
     return flatten_list(keys_train), flatten_list(keys_val), flatten_list(keys_test)
 
 
 def do_stratified_cv(
-    detector_dict: Dict,
+    mapping_dict: Dict,
     img_keys: List[str],
     folds: Optional[int],
     meta_dict: Optional[Dict],
@@ -132,11 +127,11 @@ def do_stratified_cv(
     print('---> Mapping image keys to bbox keys')
     for i, _ in enumerate(idx_train):
         slice_keys = keys_array[idx_train[i]].tolist()
-        keys_new = [map_img_to_bboxes(k, detector_dict) for k in slice_keys]
+        keys_new = [mapping_dict[k] for k in slice_keys]
         keys_train.append(flatten_list(keys_new))
     for i, _ in enumerate(idx_test):
         slice_keys = keys_array[idx_test[i]].tolist()
-        keys_new = [map_img_to_bboxes(k, detector_dict) for k in slice_keys]
+        keys_new = [mapping_dict[k] for k in slice_keys]
         keys_test.append(flatten_list(keys_new))
 
     return keys_train, keys_test
@@ -190,6 +185,7 @@ def separate_empties(
 
 def map_preds_to_img(
     preds_bboxes: Dict[str, float],
+    mapping_dict: Dict,
     detector_dict: Dict,
 ) -> Dict[str, int]:
     """Map predictions on bbox level back to img level."""
@@ -198,7 +194,7 @@ def map_preds_to_img(
 
     for key in keys_imgs:
         # Find all bbox predictions for img
-        keys_k = map_img_to_bboxes(key, detector_dict)
+        keys_k = mapping_dict[key]
         preds_k = [preds_bboxes[k] for k in keys_k]
         weights_k = [detector_dict[k].get('conf') for k in keys_k]
         weights_k_normalized = [i / sum(weights_k) for i in weights_k]
