@@ -62,12 +62,15 @@ def truncate_float(x: float, precision: int = 3) -> float:
 
 def find_depth_list(x: List) -> int:
     """Find out number of levels in nested list."""
-    return 1 + max(find_depth_list(i) for i in x)
+    if isinstance(x, list):
+        return 1 + max(find_depth_list(i) for i in x)
+    else:
+        return 0
 
 
 def flatten_list(x: List[List[Any]]) -> List:
     """Flatten list of lists."""
     depth = find_depth_list(x)
-    for i in range(depth):
+    for i in range(depth - 1):
         x = list(itertools.chain(*x))
     return x
