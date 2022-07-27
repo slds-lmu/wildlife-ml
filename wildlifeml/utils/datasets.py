@@ -124,7 +124,7 @@ def do_stratified_cv(
         raise ValueError('Please provide number of folds in cross-validation.')
 
     # Get k train-test splits
-    skf = StratifiedKFold(n_splits=folds, random_state=random_state)
+    skf = StratifiedKFold(n_splits=folds, random_state=random_state, shuffle=True)
     print('---> Performing stratified splits')
     idx_train = [list(i) for i, _ in skf.split(keys_array, strat_var_array)]
     idx_test = [list(j) for _, j in skf.split(keys_array, strat_var_array)]
