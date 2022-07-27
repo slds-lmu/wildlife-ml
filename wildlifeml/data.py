@@ -2,10 +2,12 @@
 import os
 import random
 import shutil
+from collections import Counter
 from copy import deepcopy
 from math import ceil
 from typing import (
     Dict,
+    Final,
     List,
     Optional,
     Tuple,
@@ -26,6 +28,8 @@ from wildlifeml.utils.io import (
     save_as_json,
 )
 from wildlifeml.utils.misc import list_files
+
+BBOX_SUFFIX_LEN: Final[int] = 4
 
 
 class WildlifeDataset(Sequence):
@@ -158,6 +162,34 @@ def modify_dataset(
             new_dataset.is_supervised = True
 
     return new_dataset
+
+
+# --------------------------------------------------------------------------------------
+
+
+class BBoxMapper:
+    """Object for mapping between images and bboxes (et vice versa)."""
+
+    def __init__(self, detector_file_path: str, cache_file_path: str):
+        """Initialize BBoxMapper."""
+        self.detector_dict = load_json(detector_file_path)
+        self.cache_file_path = cache_file_path
+        self.keys_img_sorted: List = []
+
+    def map_img_to_bboxes(self) -> None:
+        """Create mapping from img to bbox keys and cache."""
+        keys_bbox_sorted = sorted(list(self.detector_dict.keys()))
+        keys_img = [map_bbox_to_img(k) for k in self.detector_dict.keys()]
+        keys_img_sorted = sorted(keys_img)
+        cnts = list(Counter(keys_img_sorted).values())
+
+        key_map = {}
+        start, end = 0, cnts[0]
+        for i in range(len(keys_img_sorted)):
+            key_map.update({keys_img_sorted[i]: keys_bbox_sorted[start : end - 1]})
+            start = end
+            end = cnts[i + 1]
+        save_as_json(key_map, self.cache_file_path)
 
 
 # --------------------------------------------------------------------------------------
