@@ -182,15 +182,15 @@ class BBoxMapper:
         """Create mapping from img to bbox keys and cache."""
         keys_bbox_sorted = sorted(list(self.detector_dict.keys()))
         keys_img = [map_bbox_to_img(k) for k in self.detector_dict.keys()]
-        keys_img_sorted = sorted(keys_img)
+        keys_img_sorted = sorted(list(set(keys_img)))
         cnts = list(Counter(keys_img_sorted).values())
 
         key_map = {}
-        start, end = 0, cnts[0]
+        start = 0
         for i in range(len(keys_img_sorted)):
+            end = cnts[i]
             key_map.update({keys_img_sorted[i]: keys_bbox_sorted[start : end - 1]})
             start = end
-            end = cnts[i + 1]
         save_as_json(key_map, self.cache_file_path)
 
 
