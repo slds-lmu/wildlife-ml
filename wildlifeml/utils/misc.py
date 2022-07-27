@@ -1,7 +1,12 @@
 """Miscellaneous utilities."""
+import itertools
 import math
 import os
-from typing import List, Tuple
+from typing import (
+    Any,
+    List,
+    Tuple,
+)
 from urllib import request
 
 import numpy as np
@@ -53,3 +58,16 @@ def truncate_float(x: float, precision: int = 3) -> float:
         # Shift decimal point by multiplication with factor, flooring, and
         # division by factor
         return math.floor(x * factor) / factor
+
+
+def find_depth_list(x: List) -> int:
+    """Find out number of levels in nested list."""
+    return 1 + max(find_depth_list(i) for i in x)
+
+
+def flatten_list(x: List[List[Any]]) -> List:
+    """Flatten list of lists."""
+    depth = find_depth_list(x)
+    for i in range(depth):
+        x = list(itertools.chain(*x))
+    return x
