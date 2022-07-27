@@ -132,12 +132,14 @@ def do_stratified_cv(
     print('---> Mapping image keys to bbox keys')
     for i, _ in enumerate(idx_train):
         slice_keys = keys_array[idx_train[i]].tolist()
-        keys_train.extend([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
+        keys_new = [map_img_to_bboxes(k, detector_dict) for k in slice_keys]
+        keys_train.append(flatten_list(keys_new))
     for i, _ in enumerate(idx_test):
         slice_keys = keys_array[idx_test[i]].tolist()
-        keys_test.extend([map_img_to_bboxes(k, detector_dict) for k in slice_keys])
+        keys_new = [map_img_to_bboxes(k, detector_dict) for k in slice_keys]
+        keys_test.append(flatten_list(keys_new))
 
-    return flatten_list(keys_train), flatten_list(keys_test)
+    return keys_train, keys_test
 
 
 def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
