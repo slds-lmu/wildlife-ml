@@ -65,7 +65,7 @@ class ActiveLearner:
             keys=[],
             image_dir='',
             detector_file_path='',
-            bbox_mapping_file_path='',
+            bbox_map={},
             batch_size=0,
         )
         self.dir_img = self.pool_dataset.img_dir
