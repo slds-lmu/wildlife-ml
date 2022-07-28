@@ -172,10 +172,9 @@ def modify_dataset(
 class BBoxMapper:
     """Object for mapping between images and bboxes (et vice versa)."""
 
-    def __init__(self, detector_file_path: str, cache_file_path: str):
+    def __init__(self, detector_file_path: str):
         """Initialize BBoxMapper."""
         self.detector_dict = load_json(detector_file_path)
-        self.cache_file_path = cache_file_path
         self.keys_img_sorted: List = []
         self.key_map = self._map_img_to_bboxes()
 
