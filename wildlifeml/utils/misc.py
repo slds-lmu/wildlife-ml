@@ -62,7 +62,7 @@ def truncate_float(x: float, precision: int = 3) -> float:
 
 def find_depth_list(x: List) -> int:
     """Find out number of levels in nested list."""
-    if isinstance(x, list) & len(x):
+    if isinstance(x, list):
         return 1 + max(find_depth_list(i) for i in x)
     else:
         return 0
