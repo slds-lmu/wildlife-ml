@@ -1,9 +1,5 @@
 """Classes and functions for creating model backbones."""
-from typing import (
-    Callable,
-    Final,
-    Tuple,
-)
+from typing import Final
 
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Lambda
@@ -28,7 +24,7 @@ class ModelFactory:
         weights: str = 'imagenet',
         include_top: bool = False,
         pooling: str = 'avg',
-    ) -> Tuple[Sequential, Callable]:
+    ) -> Sequential:
         """
         Return an initialized model instance from an identifier.
 
@@ -42,7 +38,4 @@ class ModelFactory:
         model.add(model_cls(weights=weights, include_top=include_top, pooling=pooling))
         model.add(Dense(num_classes, activation='softmax'))
 
-        return (
-            model,
-            model_entry['preproc_func'],
-        )
+        return model
