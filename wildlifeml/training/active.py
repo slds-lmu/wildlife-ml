@@ -8,14 +8,6 @@ from typing import (
     Optional,
 )
 
-import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    precision_score,
-    recall_score,
-)
-
 from wildlifeml.data import WildlifeDataset, modify_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
@@ -30,10 +22,8 @@ from wildlifeml.utils.io import (
     load_csv,
     load_image,
     load_json,
-    load_pickle,
     save_as_csv,
     save_as_json,
-    save_as_pickle,
 )
 
 
@@ -46,6 +36,7 @@ class ActiveLearner:
         strategy: Literal['holdout', 'cv'],
         pool_dataset: WildlifeDataset,
         label_file_path: str,
+        empty_class_id: Optional[int] = None,
         al_batch_size: int = 10,
         active_directory: str = 'active-wildlife',
         acquisitor_name: str = 'random',
@@ -98,7 +89,14 @@ class ActiveLearner:
         self.active_counter = 0
 
         # Set up evaluator
-        self.evaluator = Evaluator(['acc'])
+        if test_dataset is not None:
+            self.evaluator = Evaluator(
+                label_file_path=label_file_path,
+                detector_file_path=test_dataset.detector_file_path,
+                dataset=test_dataset,
+                empty_class_id=empty_class_id,
+                num_classes=trainer.num_classes,
+            )
 
     def run(self) -> None:
         """Trigger Active Learning process."""
@@ -373,53 +371,15 @@ class ActiveLearner:
             print('No test dataset was specified. Evaluation is skipped.')
             return
 
-        logfile = {}
-        if self.test_logfile_path is not None and os.path.exists(
-            self.test_logfile_path
-        ):
-            logfile = load_pickle(self.test_logfile_path)
+        metrics = self.evaluator.evaluate(self.trainer.model)
 
-        print('---> Evaluating on test data')
-        # TODO find out whether keras metrics are valid (seem very optimistic)
-        keras_metrics = dict(
-            zip(
-                self.trainer.model.metrics_names,
-                self.trainer.model.evaluate(self.test_dataset),
-            )
-        )
-        y_true = np.array(
-            [
-                value
-                for key, value in self.test_dataset.label_dict.items()
-                if key in self.test_dataset.keys
-            ]
-        )
-        preds = self.predict(self.test_dataset)
-        y_pred = np.argmax(preds, axis=1)
-        acc = accuracy_score(y_true=y_true, y_pred=y_pred)
-        prec = precision_score(
-            y_true=y_true,
-            y_pred=y_pred,
-            average='macro',
-            zero_division=0,
-        )
-        rec = recall_score(
-            y_true=y_true,
-            y_pred=y_pred,
-            average='macro',
-            zero_division=0,
-        )
-        custom_metrics = {
-            'accuracy_skl': acc,
-            'precision': prec,
-            'recall': rec,
-            'confusion_matrix': confusion_matrix(y_true=y_true, y_pred=y_pred),
-        }
-        results = dict(keras_metrics, **custom_metrics)
-        print(f'accuracy: {acc:.3f}, precision: {prec:.3f}, recall: {rec:.3f}')
         if self.test_logfile_path is not None:
-            logfile.update({f'iteration {self.active_counter}': results})
-            save_as_pickle(logfile, self.test_logfile_path)
+            log = {}
+            if os.path.exists(self.test_logfile_path):
+                log.update(load_json(self.test_logfile_path))
+
+            log.update({f'iteration {self.active_counter}': metrics})
+            save_as_json(log, self.test_logfile_path)
 
     def predict(self, dataset: WildlifeDataset) -> Dict[str, float]:
         """Obtain predictions for a list of keys."""
