@@ -71,9 +71,10 @@ class Evaluator:
         # in the empty class index and zero otherwise. This is a setup for majority
         # voting via confidence and softmax scores in the evaluate phase. Consider
         # images that are filtered out by the MD with confidence 1.0.
-        empty_pred_arr = np.zeros(num_classes, dtype=np.float)
-        empty_pred_arr[:, self.empty_class_id] = 1.0
-        self.empty_preds = {zip(self.empty_keys, empty_pred_arr)}
+        self.empty_pred_arr = np.zeros(
+            len(self.empty_keys), num_classes, dtype=np.float
+        )
+        self.empty_pred_arr[:, self.empty_class_id] = 1.0
 
     def evaluate(
         self,
@@ -89,37 +90,17 @@ class Evaluator:
         # All predictions for one image are summed up and then argmaxed to obtain the
         # final prediction.
 
-        # Reweight predictions by confidence
-        # confs = np.asarray([self.detector_dict[k]['conf'] for k in self.bbox_keys])
-        # confs = confs[..., np.newaxis]
-        # preds *= confs
-
         # Aggregate empty and bbox predictions
-        # all_keys_idx = {k: i for i, k in enumerate(self.empty_keys + self.bbox_keys)}
-        # all_preds = np.concatenate([self.empty_pred_arr, preds])
-        preds.update(self.empty_preds)
+        all_keys_idx = {k: i for i, k in enumerate(self.empty_keys + self.bbox_keys)}
+        all_preds = np.concatenate([self.empty_pred_arr, preds])
 
         # Compute majority voting predictions on image level
-        # y_trues = []
-        # y_preds = []
-        #
-        # for img, bbox_list in self.bbox_map.items():
-        #     y_trues.append(self.label_dict[img])
-        #
-        #     img_pred = np.zeros(self.num_classes, dtype=np.float)
-        #     for bbox in bbox_list:
-        #         idx = all_keys_idx[bbox]
-        #         img_pred += all_preds[idx]
-        #
-        #     y_preds.append(np.argmax(img_pred))
-
-        preds = map_preds_to_img(
-            preds_bboxes=preds,
+        _, y_preds = map_preds_to_img(
+            preds_bboxes=all_preds,
             mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
         )
-        y_preds = [np.argmax(preds[k]) for k in preds.keys()]
-        y_trues = [self.label_dict[k] for k in preds.keys()]
+        y_trues = [self.label_dict[k] for k in all_keys_idx]
 
         # Compute metrics on final predictions
         metrics = Evaluator.compute_metrics(np.asarray(y_trues), np.asarray(y_preds))

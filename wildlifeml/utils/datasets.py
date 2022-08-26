@@ -184,21 +184,25 @@ def separate_empties(
 
 
 def map_preds_to_img(
-    preds_bboxes: Dict[str, float],
+    preds_bboxes: np.ndarray,
     mapping_dict: Dict,
     detector_dict: Dict,
-) -> Dict[str, int]:
+) -> Tuple[Dict[Any, np.ndarray], List[int]]:
     """Map predictions on bbox level back to img level."""
-    keys_imgs = list(set([map_bbox_to_img(k) for k in preds_bboxes.keys()]))
+    num_classes = preds_bboxes.shape[1]
+    keys_idx = {k: i for i, k in enumerate(mapping_dict.keys())}
+    confs = np.asarray([detector_dict[k]['conf'] for k in mapping_dict.keys()])
+    confs = confs[..., np.newaxis]
+    preds_bboxes *= confs
     preds_imgs = {}
+    hard_labels = []
 
-    for key in keys_imgs:
-        # Find all bbox predictions for img
-        keys_k = mapping_dict[key]
-        preds_k = [preds_bboxes[k] for k in keys_k]
-        weights_k = [detector_dict[k].get('conf') for k in keys_k]
-        weights_k_normalized = [i / sum(weights_k) for i in weights_k]
-        pred = sum([i * j for i, j in zip(weights_k_normalized, preds_k)])
-        preds_imgs.update({key: pred})
+    for img, bbox_list in mapping_dict.items():
+        pred = np.zeros(num_classes, dtype=np.float)
+        for bbox in bbox_list:
+            idx = keys_idx[bbox]
+            pred += preds_bboxes[idx]
+        preds_imgs.update({img: pred})
+        hard_labels.append(np.argmax(pred)[0])
 
-    return preds_imgs
+    return preds_imgs, hard_labels
