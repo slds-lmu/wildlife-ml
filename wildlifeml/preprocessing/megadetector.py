@@ -78,6 +78,7 @@ class MegaDetector:
         # Traverse through list according to batch size.
         print('Predicting bounding boxes ...')
         output_dict = {}
+        cnt_empty = 0
         for i in trange(0, len(file_paths), self.batch_size):
             batch_files = file_paths[i : i + self.batch_size]
 
@@ -85,12 +86,29 @@ class MegaDetector:
             imgs = np.stack([np.asarray(load_image(path)) for path in batch_files])
             # Predict bounding boxes
             batch_result = self.predict(imgs)
-            # Update results with file information and add to output
-            for result, f_path in zip(batch_result, batch_files):
-                result.update({'file': f_path})
-                output_dict.update({os.path.split(f_path)[1]: result})
 
-        print('Processing finished.')
+            # Add an entry for every bounding box found with own key
+            for detections, f_path in zip(batch_result.values(), batch_files):
+                key_stem = os.path.split(f_path)[1]
+                for i, detection in enumerate(detections, start=1):
+                    detection.update({'file': f_path})
+                    output_dict.update({key_stem + '_' + str(i).zfill(3): detection})
+
+                if len(detections) == 0:
+                    output_dict.update(
+                        {
+                            key_stem
+                            + '_'
+                            + str(1).zfill(3): {'category': int(-1), 'file': f_path}
+                        }
+                    )
+                    cnt_empty += 1
+
+        share_empty = cnt_empty / len(file_names) * 100
+        print(
+            f'Processing finished. Found bounding boxes for {1-share_empty} percent of '
+            f'images at threshold {self.confidence_threshold}.'
+        )
 
         # Save output as JSON file
         if save_file:
@@ -101,19 +119,18 @@ class MegaDetector:
 
         return output_dict
 
-    def predict(self, imgs: np.ndarray) -> List[Dict]:
+    def predict(self, imgs: np.ndarray) -> Dict[int, List[Dict]]:
         """Predict bounding boxes for a numpy array."""
         # Obtain predictions for full batch
         b_box, b_score, b_class = self.graph(imgs)
 
-        output_list = []
+        output_dict: Dict[int, List[Dict]] = {}
 
         # Construct result dictionary for all samples in the batch.
-        for boxes, scores, classes in zip(b_box, b_score, b_class):
+        for i, (boxes, scores, classes) in enumerate(zip(b_box, b_score, b_class)):
 
             # Loop over every single bounding box in every image
             detections_cur_image = []
-            max_detection_conf = 0.0
             for b, s, c in zip(boxes, scores, classes):
 
                 if s > self.confidence_threshold:
@@ -122,18 +139,12 @@ class MegaDetector:
                         'conf': truncate_float(float(s), precision=4),
                         'bbox': MegaDetector._convert_coords(b),
                     }
+
                     detections_cur_image.append(detection_entry)
-                    if s > max_detection_conf:
-                        max_detection_conf = truncate_float(float(s), precision=4)
 
-            output_list.append(
-                {
-                    'max_detection_conf': max_detection_conf,
-                    'detections': detections_cur_image,
-                }
-            )
+            output_dict.update({i: detections_cur_image})
 
-        return output_list
+        return output_dict
 
     @staticmethod
     def _convert_coords(coords: np.ndarray) -> Tuple[float, ...]:

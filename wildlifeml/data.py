@@ -2,24 +2,24 @@
 import os
 import random
 import shutil
+from collections import Counter
 from copy import deepcopy
 from math import ceil
 from typing import (
-    Any,
     Dict,
+    Final,
     List,
-    Literal,
     Optional,
     Tuple,
 )
 
 import albumentations as A
 import numpy as np
-from sklearn.model_selection import train_test_split
 from tensorflow.keras.utils import Sequence
 from tqdm import tqdm
 
 from wildlifeml.preprocessing.cropping import Cropper
+from wildlifeml.utils.datasets import map_bbox_to_img
 from wildlifeml.utils.io import (
     load_csv,
     load_image,
@@ -28,6 +28,8 @@ from wildlifeml.utils.io import (
     save_as_json,
 )
 from wildlifeml.utils.misc import list_files
+
+BBOX_SUFFIX_LEN: Final[int] = 4
 
 
 class WildlifeDataset(Sequence):
@@ -39,6 +41,7 @@ class WildlifeDataset(Sequence):
         image_dir: str,
         detector_file_path: str,
         batch_size: int,
+        bbox_map: Dict[str, List[str]],
         label_file_path: Optional[str] = None,
         shuffle: bool = True,
         resolution: int = 224,
@@ -60,7 +63,9 @@ class WildlifeDataset(Sequence):
             self.is_supervised = False
             self.label_dict = {}
 
+        self.detector_file_path = detector_file_path
         self.detector_dict = load_json(detector_file_path)
+        self.mapping_dict = bbox_map
 
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -90,8 +95,8 @@ class WildlifeDataset(Sequence):
         return ceil(len(self.keys) / self.batch_size)
 
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
-        """Return a batch with training data and labels."""
-        # Extract keys that correspond with batch.
+        """Return a batch with training data and labels on bounding-box level."""
+        # Extract keys that correspond to batch.
         start_idx = idx * self.batch_size
         end_idx = min(len(self.keys), start_idx + self.batch_size)
         batch_keys = self.keys[start_idx:end_idx]
@@ -99,12 +104,11 @@ class WildlifeDataset(Sequence):
         imgs = []
         for key in batch_keys:
             entry = self.detector_dict[key]
-            img_path = os.path.join(self.img_dir, key)
-            img = np.asarray(load_image(img_path))
+            img = np.asarray(load_image(entry['file']))
 
             # Crop according to bounding box if applicable
-            if self.do_cropping and len(entry['detections']) > 0:
-                img = self.cropper.crop(img, bbox=entry['detections'][0]['bbox'])
+            if self.do_cropping and entry.get('bbox') is not None:
+                img = self.cropper.crop(img, bbox=entry['bbox'])
 
             # Resize to target resolution for network
             img = A.resize(
@@ -119,7 +123,8 @@ class WildlifeDataset(Sequence):
 
         # Extract labels
         if self.is_supervised:
-            labels = np.asarray([self.label_dict[key] for key in batch_keys])
+            batch_keys_stem = [map_bbox_to_img(key) for key in batch_keys]
+            labels = np.asarray([self.label_dict[key] for key in batch_keys_stem])
         else:
             # We need to add a dummy for unsupervised case because TF.
             labels = np.empty(shape=self.batch_size, dtype=float)
@@ -127,24 +132,40 @@ class WildlifeDataset(Sequence):
         return np.stack(imgs).astype(float), labels
 
 
-def append_dataset(dataset: WildlifeDataset, new_label_dict: Dict) -> WildlifeDataset:
-    """Clone a WildlifeDataset object and enrich with new images."""
-    new_keys = list(new_label_dict.keys())
-    if not all(x in dataset.detector_dict.keys() for x in new_keys):
-        raise ValueError('No Megadetector results found for provided keys.')
+def modify_dataset(
+    dataset: WildlifeDataset,
+    extend: bool = False,
+    keys: Optional[List[str]] = None,
+    new_label_dict: Optional[Dict] = None,
+) -> WildlifeDataset:
+    """Clone a WildlifeDataset object and extend or subset."""
+    if keys is None:
+        if new_label_dict is None:
+            raise IOError('You need to provide either keys or a label dictionary.')
+        keys = list(new_label_dict.keys())
+
     new_dataset = deepcopy(dataset)
-    new_dataset.set_keys(new_dataset.keys + new_keys)
-    new_dataset.label_dict.update(new_label_dict)
+    new_keys = keys + new_dataset.keys if extend else keys
+    new_dataset.set_keys(new_keys)
+    new_dataset.mapping_dict = {
+        k: v for k, v in new_dataset.mapping_dict.items() if k in new_keys
+    }
 
-    return new_dataset
+    if extend:
+        if not all(x in dataset.detector_dict.keys() for x in keys):
+            raise ValueError('No Megadetector results found for provided keys.')
+        if dataset.is_supervised:
+            if new_label_dict is None:
+                raise ValueError(
+                    'You are attempting to extend a supervised dataset. '
+                    'Please provide labels for keys to be appended.'
+                )
+            new_dataset.label_dict.update(new_label_dict)
 
-
-def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset:
-    """Clone a WildlifeDataset object and subset to given keys."""
-    if len(set.difference(set(keys), set(dataset.keys))) > 0:
-        raise ValueError('Provided keys must be a subset of dataset keys.')
-    new_dataset = deepcopy(dataset)
-    new_dataset.set_keys(keys)
+    else:
+        if not dataset.is_supervised and new_label_dict is not None:
+            new_dataset.label_dict.update(new_label_dict)
+            new_dataset.is_supervised = True
 
     return new_dataset
 
@@ -152,153 +173,33 @@ def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset
 # --------------------------------------------------------------------------------------
 
 
-def do_train_split(
-    label_file_path: str,
-    splits: Tuple[float, float, float],
-    strategy: Literal['random', 'class', 'class_plus_custom'],
-    stratifier_file_path: Optional[str] = None,
-    random_state: Optional[int] = None,
-    detector_file_path: Optional[str] = None,
-    min_threshold: float = 0.0,
-) -> Tuple[List[str], List[str], List[str]]:
-    """Split a csv with labels in train & test data and filter with detector results."""
-    label_dict = {key: value for key, value in load_csv(label_file_path)}
+class BBoxMapper:
+    """Object for mapping between images and bboxes (et vice versa)."""
 
-    # Filter detector results for relevant detections
-    if detector_file_path is not None:
-        new_keys = filter_detector_keys(
-            detector_file_path=detector_file_path,
-            min_threshold=min_threshold,
-        )
-        label_dict = {
-            key: label_dict[key] for key in label_dict.keys() if key in new_keys
-        }
+    def __init__(self, detector_file_path: str):
+        """Initialize BBoxMapper."""
+        self.detector_dict = load_json(detector_file_path)
+        self.key_map = self._map_img_to_bboxes()
 
-    # Define stratification variable (none, class labels or class labels + custom)
-    stratify = get_stratifier(
-        strategy=strategy,
-        label_dict=label_dict,
-        stratifier_file_path=stratifier_file_path,
-    )
+    def _map_img_to_bboxes(self) -> Dict[str, List[str]]:
+        """Create mapping from img to bbox keys and cache."""
+        keys_bbox_sorted = sorted(list(self.detector_dict.keys()))
+        keys_img = [map_bbox_to_img(k) for k in keys_bbox_sorted]
+        keys_img_sorted = sorted(keys_img)
+        cnts = list(Counter(keys_img_sorted).values())
+        keys_img_unique = sorted(list(set(keys_img_sorted)))
 
-    # Make stratified split and throw error if stratification variable lacks support
-    # keys_train, keys_val, keys_test = [], [], []
-    keys_train, keys_test = try_split(
-        list(label_dict.keys()),
-        train_size=splits[0] + splits[1],
-        test_size=splits[2],
-        random_state=random_state,
-        stratify=stratify,
-    )
-    keys_val = ['']
+        key_map = {}
+        start = 0
+        for i in range(len(keys_img_unique)):
+            end = start + cnts[i]
+            key_map.update({keys_img_unique[i]: keys_bbox_sorted[start:end]})
+            start = end
+        return key_map
 
-    # Reiterate process to split keys_train in train and val if required
-    if splits[1] > 0:
-        label_dict = {key: val for key, val in label_dict.items() if key in keys_train}
-        stratify = get_stratifier(
-            strategy=strategy,
-            label_dict=label_dict,
-            stratifier_file_path=stratifier_file_path,
-        )
-        keys_train, keys_val = try_split(
-            keys_train,
-            train_size=splits[0] + splits[1],
-            test_size=splits[2],
-            random_state=random_state,
-            stratify=stratify,
-        )
-
-    return keys_train, keys_val, keys_test
-
-
-def filter_detector_keys(
-    detector_file_path: str,
-    keys: Optional[List[str]] = None,
-    min_threshold: float = 0.0,
-) -> List[str]:
-    """Get keys from directory and filter with detector results."""
-    # Filter detector results for relevant detections
-    if keys is not None:
-        detector_dict = {
-            key: value
-            for key, value in load_json(detector_file_path).items()
-            if key in keys
-        }
-    else:
-        detector_dict = load_json(detector_file_path)
-    print(
-        'Filtering images with no detected object '
-        'and not satisfying minimum threshold.'
-    )
-    new_keys = [
-        key
-        for key, val in detector_dict.items()
-        if len(val['detections']) > 0 and val['max_detection_conf'] >= min_threshold
-    ]
-    print(
-        f'Filtered out {len(detector_dict.keys()) - len(new_keys)} elements. '
-        f'Current dataset size is {len(new_keys)}.'
-    )
-
-    return new_keys
-
-
-def get_stratifier(
-    strategy: str,
-    label_dict: Dict,
-    stratifier_file_path: Optional[str] = None,
-) -> Any:
-    """Create stratifying variable for dataset splitting."""
-    if strategy == 'random':
-        return None
-
-    elif strategy == 'class':
-        return np.array(list(label_dict.values()))
-
-    elif strategy == 'class_plus_custom':
-        if stratifier_file_path is None:
-            raise ValueError(
-                f'Strategy "{strategy}" requires file with key-stratifier pairs'
-            )
-        stratifier_dict = {
-            key: value
-            for key, value in load_csv(stratifier_file_path)
-            if key in label_dict.keys()
-        }
-        return np.dstack(
-            (list(label_dict.values()), list(stratifier_dict.values()))
-        ).squeeze(0)
-
-    else:
-        raise ValueError(f'"{strategy}" is not a valid splitting strategy')
-
-
-def try_split(
-    keys: List[str],
-    train_size: float,
-    test_size: float,
-    random_state=Optional[int],
-    stratify=Any,
-) -> Tuple[List[str], List[str]]:
-    """Attempt stratified split with sklearn."""
-    stratification_warning = (
-        'Stratified sampling is only supported for stratifying '
-        'variables with sufficient data support in each category. '
-        'Try grouping infrequent categories into larger ones.'
-    )
-    try:
-        return train_test_split(
-            keys,
-            train_size=train_size,
-            test_size=test_size,
-            random_state=random_state,
-            stratify=stratify,
-        )
-
-    except ValueError as e:
-        if 'least populated class' in str(e):
-            e.args = (stratification_warning,)
-        raise e
+    def get_keymap(self) -> Dict:
+        """Return the key map."""
+        return self.key_map
 
 
 # --------------------------------------------------------------------------------------

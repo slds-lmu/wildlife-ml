@@ -33,12 +33,12 @@ class Cropper:
             y_length = y_coords[1] - y_coords[0]
             edge_length = max(x_length, y_length)
             cropped_img = np.pad(
-                img[y_coords[0]: y_coords[1], x_coords[0]: x_coords[1]],
+                img[y_coords[0] : y_coords[1], x_coords[0] : x_coords[1]],
                 [(0, edge_length - y_length), (0, edge_length - x_length), (0, 0)],
             )
             return cropped_img
 
-        return img[y_coords[0]: y_coords[1] + 1, x_coords[0]: x_coords[1] + 1]
+        return img[y_coords[0] : y_coords[1] + 1, x_coords[0] : x_coords[1] + 1]
 
     @staticmethod
     def get_absolute_coords(
@@ -68,8 +68,8 @@ class Cropper:
         """
         height, width = dims
 
-        x_length = (x_coords[1] - x_coords[0])
-        y_length = (y_coords[1] - y_coords[0])
+        x_length = x_coords[1] - x_coords[0]
+        y_length = y_coords[1] - y_coords[0]
         diff_xy = x_length - y_length
         half_diff = 0.5 * abs(diff_xy)
 

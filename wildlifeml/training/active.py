@@ -7,33 +7,26 @@ from typing import (
     Optional,
 )
 
-import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    precision_score,
-    recall_score,
-)
+from tensorflow.keras import Model
 
-from wildlifeml.data import (
-    WildlifeDataset,
-    append_dataset,
-    do_train_split,
-    subset_dataset,
-)
+from wildlifeml.data import WildlifeDataset, modify_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
-from wildlifeml.training.trainer import WildlifeTrainer
+from wildlifeml.training.evaluator import Evaluator
+from wildlifeml.training.trainer import BaseTrainer
+from wildlifeml.utils.datasets import (
+    do_stratified_splitting,
+    map_bbox_to_img,
+    map_preds_to_img,
+    render_bbox,
+)
 from wildlifeml.utils.io import (
     load_csv,
     load_image,
     load_json,
-    load_pickle,
     save_as_csv,
     save_as_json,
-    save_as_pickle,
 )
-from wildlifeml.utils.misc import render_bbox
 
 
 class ActiveLearner:
@@ -41,48 +34,67 @@ class ActiveLearner:
 
     def __init__(
         self,
-        trainer: WildlifeTrainer,
-        train_dataset: WildlifeDataset,
-        val_dataset: WildlifeDataset,
+        trainer: BaseTrainer,
         pool_dataset: WildlifeDataset,
         label_file_path: str,
+        empty_class_id: Optional[int] = None,
         al_batch_size: int = 10,
         active_directory: str = 'active-wildlife',
         acquisitor_name: str = 'random',
         start_fresh: bool = True,
         start_keys: List[str] = None,
+        train_size: float = 0.7,
         test_dataset: Optional[WildlifeDataset] = None,
         test_logfile_path: Optional[str] = None,
+        meta_dict: Optional[Dict] = None,
         state_cache: str = '.activecache.json',
         random_state: Optional[int] = None,
     ) -> None:
         """Instantiate an ActiveLearner object."""
         self.pool_dataset = pool_dataset
+        self.labeled_dataset = WildlifeDataset(
+            keys=[],
+            image_dir='',
+            detector_file_path='',
+            bbox_map={},
+            batch_size=0,
+        )
         self.dir_img = self.pool_dataset.img_dir
         self.dir_act = active_directory
 
         self.trainer = trainer
-
-        self.train_dataset = train_dataset
-        self.val_dataset = val_dataset
         self.label_file_path = label_file_path
+        self.train_size = train_size
+
+        self.test_dataset = test_dataset
+        self.test_logfile_path = test_logfile_path
 
         self.acquisitor = AcquisitorFactory.get(
             acquisitor_name, top_k=al_batch_size, random_state=random_state
         )
-        self.test_dataset = test_dataset
-        self.test_logfile_path = test_logfile_path
         self.al_batch_size = al_batch_size
         self.random_state = random_state
-
         self.state_cache_file = state_cache
         self.do_fresh_start = start_fresh
         self.start_keys = start_keys
+
+        self.train_size = train_size
+        self.meta_dict = meta_dict
 
         # Serves as storage for all active keys and labels.
         self.active_labels: Dict[str, float] = {}
         # Count active learning iterations
         self.active_counter = 0
+
+        # Set up evaluator
+        if test_dataset is not None:
+            self.evaluator = Evaluator(
+                label_file_path=label_file_path,
+                detector_file_path=test_dataset.detector_file_path,
+                dataset=test_dataset,
+                empty_class_id=empty_class_id,
+                num_classes=trainer.get_num_classes(),
+            )
 
     def run(self) -> None:
         """Trigger Active Learning process."""
@@ -114,7 +126,11 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
-        preds = dict(zip(self.pool_dataset.keys, self.predict(self.pool_dataset)))
+        preds = self.predict_img(
+            dataset=self.pool_dataset,
+            mapping_dict=self.pool_dataset.mapping_dict,
+            detector_file_path=self.pool_dataset.detector_file_path,
+        )
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
@@ -131,9 +147,17 @@ class ActiveLearner:
             if 'y' not in input().lower():
                 print('Active Learning setup is aborted.')
                 exit()
+            else:
+                os.remove(self.state_cache_file)
 
         os.makedirs(self.dir_act, exist_ok=True)
         os.makedirs(os.path.join(self.dir_act, 'images'), exist_ok=True)
+
+        # Remove old log file
+        if self.test_logfile_path is not None and os.path.exists(
+            self.test_logfile_path
+        ):
+            os.remove(self.test_logfile_path)
 
         if self.start_keys is None:
             print(
@@ -161,6 +185,7 @@ class ActiveLearner:
             self.dir_act = state['active_directory']
             self.random_state = state['random_state']
             self.active_labels = state['active_labels']
+            self.labeled_dataset = state['labeled_dataset']
             self.active_counter = state['active_counter']
             self.active_counter += 1
 
@@ -185,6 +210,7 @@ class ActiveLearner:
             'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
             'active_labels': self.active_labels,
+            'labeled_dataset': self.labeled_dataset,
             'active_counter': self.active_counter,
         }
         save_as_json(state, self.state_cache_file)
@@ -198,27 +224,36 @@ class ActiveLearner:
         `images` and the `active_labels.csv` contains a template for adding labels.
         """
         target_path = os.path.join(self.dir_act, 'images')
+        keys_img = list(set([map_bbox_to_img(k) for k in keys]))
 
-        for key in keys:
-            entry = self.pool_dataset.detector_dict[key]
-            img = load_image(entry['file'])
+        # Save images with bboxes highlighted for user to label
+        for key in keys_img:
+            bbox_keys = self.pool_dataset.mapping_dict[key]
+            first_entry = self.pool_dataset.detector_dict[bbox_keys[0]]
+            img = load_image(first_entry['file'])
             width, height = img.size
-
-            x_coords, y_coords = Cropper.get_absolute_coords(
-                entry['detections'][0]['bbox'], (height, width)
-            )
+            x_coords, y_coords = [], []
+            for bkey in bbox_keys:
+                x, y = Cropper.get_absolute_coords(
+                    self.pool_dataset.detector_dict[bkey].get('bbox'), (height, width)
+                )
+                x_coords.append(x)
+                y_coords.append(y)
             img = render_bbox(img, x_coords, y_coords)
-
             img.save(os.path.join(target_path, key))
 
-        label_template = [(key, '') for key in keys]
+        # Save list for user to fill in labels
+        label_template = [(key, '') for key in keys_img]
         save_as_csv(
             rows=label_template, target=os.path.join(self.dir_act, 'active_labels.csv')
         )
 
         print(
             f'A selection of images is now waiting in "{self.dir_act}" for your '
-            f'labeling expertise!\nRerun the program when you are done.'
+            f'labeling expertise! \nPlease provide class labels in integer format.'
+            f'\n Special cases: please use the label "-1" for empty images and the '
+            f'label "-2" for images with more than one animal species present.'
+            f'\nRerun the program when you are done.'
         )
 
     def collect(self) -> None:
@@ -239,45 +274,23 @@ class ActiveLearner:
                 }
             )
         except IOError:
-            'There is a problem with your label file.'
-            'Make sure you have supplied a label for every entry.'
+            print(
+                'There is a problem with your label file.'
+                'Make sure you have supplied a label for every entry.'
+            )
 
         # Check whether label type is valid
         set_labels_supplied = set(labels_supplied.values())
-        set_labels_train = set(self.train_dataset.label_dict.values())
+        set_labels_train = set(self.active_labels.values())
         unknown_labels = set.difference(set_labels_supplied, set_labels_train)
         if len(unknown_labels) > 0:
             print(
-                f'Please note: Your supplied labels contain classes "{unknown_labels}" '
+                f'Please note: your supplied labels contain classes "{unknown_labels}" '
                 f'which have so far not been part of the training data.'
             )
 
-        # Update datasets (add new instances to train and validation data in constant
-        # proportion; remove them from pool dataset)
-        # TODO think about stratification here (at least by class)
-        n_t = len(self.train_dataset.keys)
-        n_v = len(self.val_dataset.keys)
-        train_keys, _, val_keys = do_train_split(
-            label_file_path=os.path.join(self.dir_act, 'active_labels.csv'),
-            splits=(n_t / (n_t + n_v), 0, n_v / (n_t + n_v)),
-            strategy='random',
-            random_state=self.random_state,
-        )
-        self.train_dataset = append_dataset(
-            dataset=self.train_dataset,
-            new_label_dict={
-                k: v for k, v in labels_supplied.items() if k in train_keys
-            },
-        )
-        self.val_dataset = append_dataset(
-            dataset=self.train_dataset,
-            new_label_dict={k: v for k, v in labels_supplied.items() if k in val_keys},
-        )
-        self.pool_dataset = subset_dataset(
-            dataset=self.pool_dataset,
-            keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
-        )
-        # Update label file
+        # Update label dict and file
+        self.active_labels.update(labels_supplied)
         labels_existing = {
             key: float(value) for key, value in load_csv(self.label_file_path)
         }
@@ -287,6 +300,17 @@ class ActiveLearner:
             target=self.label_file_path,
         )
 
+        # Update pool and labeled datasets, omitting mixed-class imgs for training
+        self.labeled_dataset = modify_dataset(
+            dataset=self.pool_dataset,
+            new_label_dict={k: v for k, v in labels_supplied.items() if v != -2},
+            extend=True,
+        )
+        self.pool_dataset = modify_dataset(
+            dataset=self.pool_dataset,
+            keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
+        )
+
         # Wipe staging area
         for f in os.listdir(os.path.join(self.dir_act, 'images')):
             os.remove(os.path.join(self.dir_act, 'images', f))
@@ -294,60 +318,62 @@ class ActiveLearner:
 
     def fit(self) -> None:
         """Fit the model with active data."""
+        # Get new train and val sets
+        meta_dict = self.meta_dict if self.meta_dict is not None else self.active_labels
+        keys_train, _, keys_val = do_stratified_splitting(
+            mapping_dict=self.pool_dataset.mapping_dict,
+            img_keys=list(self.active_labels.keys()),
+            splits=(self.train_size, 0.0, 1 - self.train_size),
+            random_state=self.random_state,
+            meta_dict=meta_dict,
+        )
+        train_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_train)
+        val_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_val)
+
+        # Train model
         self.trainer.reset_model()
-        self.trainer.fit(self.train_dataset, self.val_dataset)
+        self.trainer.fit(train_dataset, val_dataset)
+
+    def get_model(self) -> Model:
+        """Return current model instance."""
+        return self.trainer.get_model()
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
-        logfile = {}
-        if self.test_logfile_path is not None and os.path.exists(
-            self.test_logfile_path
-        ):
-            logfile = load_pickle(self.test_logfile_path)
+        if self.test_dataset is None:
+            print('No test dataset was specified. Evaluation is skipped.')
+            return
 
-        print('---> Evaluating on test data')
-        # TODO find out whether keras metrics are valid (seem very optimistic)
-        keras_metrics = dict(
-            zip(
-                self.trainer.model.metrics_names,
-                self.trainer.model.evaluate(self.test_dataset),
-            )
+        metrics = self.evaluator.evaluate(self.trainer.get_model())
+
+        if self.test_logfile_path is not None:
+            log = {}
+            if os.path.exists(self.test_logfile_path):
+                log.update(load_json(self.test_logfile_path))
+
+            log.update({f'iteration {self.active_counter}': metrics})
+            save_as_json(log, self.test_logfile_path)
+
+    def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
+        """Obtain bbox-level predictions."""
+        return dict(zip(dataset.keys, self.trainer.predict(dataset)))
+
+    def predict_img(
+        self,
+        dataset: WildlifeDataset,
+        mapping_dict: Dict,
+        detector_file_path: str,
+    ) -> Dict:
+        """Obtain img-level predictions."""
+        preds_bboxes = self.trainer.predict(dataset)
+
+        detector_dict = load_json(detector_file_path)
+        removable_keys = set(mapping_dict) - set(dataset.keys)
+        for k in removable_keys:
+            del mapping_dict[k]
+        preds_img, _ = map_preds_to_img(
+            preds_bboxes=preds_bboxes,
+            mapping_dict=mapping_dict,
+            detector_dict=detector_dict,
         )
-        if self.test_dataset is not None:
-            y_true = np.array(
-                [
-                    value
-                    for key, value in self.test_dataset.label_dict.items()
-                    if key in self.test_dataset.keys
-                ]
-            )
-            preds = self.predict(self.test_dataset)
-            y_pred = np.argmax(preds, axis=1)
-            acc = accuracy_score(y_true=y_true, y_pred=y_pred)
-            prec = precision_score(
-                y_true=y_true,
-                y_pred=y_pred,
-                average='macro',
-                zero_division=0,
-            )
-            rec = recall_score(
-                y_true=y_true,
-                y_pred=y_pred,
-                average='macro',
-                zero_division=0,
-            )
-            custom_metrics = {
-                'accuracy_skl': acc,
-                'precision': prec,
-                'recall': rec,
-                'confusion_matrix': confusion_matrix(y_true=y_true, y_pred=y_pred),
-            }
-            results = dict(keras_metrics, **custom_metrics)
-            print(f'accuracy: {acc:.3f}, precision: {prec:.3f}, recall: {rec:.3f}')
-            if self.test_logfile_path is not None:
-                logfile.update({f'iteration {self.active_counter}': results})
-                save_as_pickle(logfile, self.test_logfile_path)
-
-    def predict(self, dataset: WildlifeDataset) -> np.ndarray:
-        """Obtain predictions for a list of keys."""
-        return self.trainer.predict(dataset)
+        return preds_img
