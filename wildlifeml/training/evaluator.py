@@ -1,5 +1,4 @@
 """Evaluating model outputs."""
-from copy import deepcopy
 from typing import Dict, Optional
 
 import numpy as np
@@ -12,10 +11,11 @@ from sklearn.metrics import (
 from tensorflow.keras import Model
 
 from wildlifeml.data import (
-    BBOX_SUFFIX_LEN,
     BBoxMapper,
     WildlifeDataset,
+    modify_dataset,
 )
+from wildlifeml.utils.datasets import map_bbox_to_img, map_preds_to_img
 from wildlifeml.utils.io import load_csv, load_json
 
 
@@ -38,7 +38,7 @@ class Evaluator:
         self.num_classes = num_classes
 
         # Index what images are contained in the eval dataset
-        self.dataset_imgs = set([k[:-BBOX_SUFFIX_LEN] for k in dataset.keys])
+        self.dataset_imgs = set([map_bbox_to_img(k) for k in dataset.keys])
         # Get mapping of img -> bboxs for dataset
         self.bbox_map = BBoxMapper(detector_file_path).get_keymap()
         # Remove keys from bbox_map that are not in the eval dataset
@@ -51,12 +51,11 @@ class Evaluator:
             k for k in dataset.keys if self.detector_dict[k]['category'] == -1
         ]
 
-        # Remove keys from dataset, where MD detects no bbox
+        # Remove keys from dataset where MD detects no bbox
         self.bbox_keys = list(set(dataset.keys) - set(self.empty_keys))
 
         # Only register samples that are not filtered by MD
-        self.dataset = deepcopy(dataset)
-        self.dataset.set_keys(self.bbox_keys)
+        self.dataset = modify_dataset(dataset, keys=self.bbox_keys)
         self.dataset.shuffle = False
 
         # Dirty fix for determining which Keras class predictions
@@ -72,10 +71,9 @@ class Evaluator:
         # in the empty class index and zero otherwise. This is a setup for majority
         # voting via confidence and softmax scores in the evaluate phase. Consider
         # images that are filtered out by the MD with confidence 1.0.
-        self.empty_pred_arr = np.zeros(
-            len(self.empty_keys), num_classes, dtype=np.float
-        )
-        self.empty_pred_arr[:, self.empty_class_id] = 1.0
+        empty_pred_arr = np.zeros(num_classes, dtype=np.float)
+        empty_pred_arr[:, self.empty_class_id] = 1.0
+        self.empty_preds = {zip(self.empty_keys, empty_pred_arr)}
 
     def evaluate(
         self,
@@ -92,27 +90,36 @@ class Evaluator:
         # final prediction.
 
         # Reweight predictions by confidence
-        confs = np.asarray([self.detector_dict[k]['conf'] for k in self.bbox_keys])
-        confs = confs[..., np.newaxis]
-        preds *= confs
+        # confs = np.asarray([self.detector_dict[k]['conf'] for k in self.bbox_keys])
+        # confs = confs[..., np.newaxis]
+        # preds *= confs
 
         # Aggregate empty and bbox predictions
-        all_keys_idx = {k: i for i, k in enumerate(self.empty_keys + self.bbox_keys)}
-        all_preds = np.concatenate([self.empty_pred_arr, preds])
+        # all_keys_idx = {k: i for i, k in enumerate(self.empty_keys + self.bbox_keys)}
+        # all_preds = np.concatenate([self.empty_pred_arr, preds])
+        preds.update(self.empty_preds)
 
         # Compute majority voting predictions on image level
-        y_trues = []
-        y_preds = []
+        # y_trues = []
+        # y_preds = []
+        #
+        # for img, bbox_list in self.bbox_map.items():
+        #     y_trues.append(self.label_dict[img])
+        #
+        #     img_pred = np.zeros(self.num_classes, dtype=np.float)
+        #     for bbox in bbox_list:
+        #         idx = all_keys_idx[bbox]
+        #         img_pred += all_preds[idx]
+        #
+        #     y_preds.append(np.argmax(img_pred))
 
-        for img, bbox_list in self.bbox_map.items():
-            y_trues.append(self.label_dict[img])
-
-            img_pred = np.zeros(self.num_classes, dtype=np.float)
-            for bbox in bbox_list:
-                idx = all_keys_idx[bbox]
-                img_pred += all_preds[idx]
-
-            y_preds.append(np.argmax(img_pred))
+        preds = map_preds_to_img(
+            preds_bboxes=preds,
+            mapping_dict=self.bbox_map,
+            detector_dict=self.detector_dict,
+        )
+        y_preds = [np.argmax(preds[k]) for k in preds.keys()]
+        y_trues = [self.label_dict[k] for k in preds.keys()]
 
         # Compute metrics on final predictions
         metrics = Evaluator.compute_metrics(np.asarray(y_trues), np.asarray(y_preds))

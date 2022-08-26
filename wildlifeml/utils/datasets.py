@@ -38,7 +38,7 @@ def render_bbox(
 
 def map_bbox_to_img(bbox_key: str) -> str:
     """Find img key for bbox-level key."""
-    return bbox_key[: len(bbox_key) - BBOX_SUFFIX_LEN]
+    return bbox_key[:-BBOX_SUFFIX_LEN]
 
 
 # --------------------------------------------------------------------------------------
