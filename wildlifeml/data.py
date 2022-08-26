@@ -63,6 +63,7 @@ class WildlifeDataset(Sequence):
             self.is_supervised = False
             self.label_dict = {}
 
+        self.detector_file_path = detector_file_path
         self.detector_dict = load_json(detector_file_path)
         self.mapping_dict = bbox_map
 
@@ -175,7 +176,6 @@ class BBoxMapper:
     def __init__(self, detector_file_path: str):
         """Initialize BBoxMapper."""
         self.detector_dict = load_json(detector_file_path)
-        self.keys_img_sorted: List = []
         self.key_map = self._map_img_to_bboxes()
 
     def _map_img_to_bboxes(self) -> Dict[str, List[str]]:
@@ -193,6 +193,10 @@ class BBoxMapper:
             key_map.update({keys_img_unique[i]: keys_bbox_sorted[start:end]})
             start = end
         return key_map
+
+    def get_keymap(self) -> Dict:
+        """Return the key map."""
+        return self.key_map
 
 
 # --------------------------------------------------------------------------------------
