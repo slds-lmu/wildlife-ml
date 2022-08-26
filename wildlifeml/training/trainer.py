@@ -56,6 +56,11 @@ class BaseTrainer(ABC):
         """Make predictions according to trained model."""
         pass
 
+    @abstractmethod
+    def get_num_classes(self):
+        """Return number of classes."""
+        pass
+
 
 class WildlifeTrainer(BaseTrainer):
     """Trainer object for assisting with fitting neural networks."""
@@ -93,6 +98,10 @@ class WildlifeTrainer(BaseTrainer):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.eval_metrics = eval_metrics
+
+    def get_num_classes(self) -> int:
+        """Return number of classes."""
+        return self.num_classes
 
     def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""
@@ -256,6 +265,10 @@ class WildlifeTuningTrainer(BaseTrainer):
 
         self.optimal_config: Optional[Dict] = None
         self.model: Optional[Model] = None
+
+    def get_num_classes(self) -> int:
+        """Return number of classes."""
+        return self.num_classes
 
     def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""

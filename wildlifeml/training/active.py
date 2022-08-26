@@ -4,19 +4,20 @@ import random
 from typing import (
     Dict,
     List,
-    Literal,
     Optional,
 )
+
+from tensorflow.keras import Model
 
 from wildlifeml.data import WildlifeDataset, modify_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
 from wildlifeml.training.evaluator import Evaluator
-from wildlifeml.training.trainer import WildlifeTrainer
+from wildlifeml.training.trainer import BaseTrainer
 from wildlifeml.utils.datasets import (
-    do_stratified_cv,
     do_stratified_splitting,
     map_bbox_to_img,
+    map_preds_to_img,
     render_bbox,
 )
 from wildlifeml.utils.io import (
@@ -33,8 +34,7 @@ class ActiveLearner:
 
     def __init__(
         self,
-        trainer: WildlifeTrainer,
-        strategy: Literal['holdout', 'cv'],
+        trainer: BaseTrainer,
         pool_dataset: WildlifeDataset,
         label_file_path: str,
         empty_class_id: Optional[int] = None,
@@ -43,8 +43,7 @@ class ActiveLearner:
         acquisitor_name: str = 'random',
         start_fresh: bool = True,
         start_keys: List[str] = None,
-        train_size: Optional[float] = None,
-        folds: Optional[int] = None,
+        train_size: float = 0.7,
         test_dataset: Optional[WildlifeDataset] = None,
         test_logfile_path: Optional[str] = None,
         meta_dict: Optional[Dict] = None,
@@ -65,9 +64,7 @@ class ActiveLearner:
 
         self.trainer = trainer
         self.label_file_path = label_file_path
-        self.strategy = strategy
         self.train_size = train_size
-        self.folds = folds
 
         self.test_dataset = test_dataset
         self.test_logfile_path = test_logfile_path
@@ -96,7 +93,7 @@ class ActiveLearner:
                 detector_file_path=test_dataset.detector_file_path,
                 dataset=test_dataset,
                 empty_class_id=empty_class_id,
-                num_classes=trainer.num_classes,
+                num_classes=trainer.get_num_classes(),
             )
 
     def run(self) -> None:
@@ -129,7 +126,11 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
-        preds = self.predict(self.pool_dataset)
+        preds = self.predict_img(
+            dataset=self.pool_dataset,
+            mapping_dict=self.pool_dataset.mapping_dict,
+            detector_file_path=self.pool_dataset.detector_file_path,
+        )
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
@@ -225,6 +226,7 @@ class ActiveLearner:
         target_path = os.path.join(self.dir_act, 'images')
         keys_img = list(set([map_bbox_to_img(k) for k in keys]))
 
+        # Save images with bboxes highlighted for user to label
         for key in keys_img:
             bbox_keys = self.pool_dataset.mapping_dict[key]
             first_entry = self.pool_dataset.detector_dict[bbox_keys[0]]
@@ -240,7 +242,8 @@ class ActiveLearner:
             img = render_bbox(img, x_coords, y_coords)
             img.save(os.path.join(target_path, key))
 
-        label_template = [(key, '') for key in keys]
+        # Save list for user to fill in labels
+        label_template = [(key, '') for key in keys_img]
         save_as_csv(
             rows=label_template, target=os.path.join(self.dir_act, 'active_labels.csv')
         )
@@ -301,11 +304,11 @@ class ActiveLearner:
         self.labeled_dataset = modify_dataset(
             dataset=self.pool_dataset,
             new_label_dict={k: v for k, v in labels_supplied.items() if v != -2},
+            extend=True,
         )
         self.pool_dataset = modify_dataset(
             dataset=self.pool_dataset,
             keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
-            extend=False,
         )
 
         # Wipe staging area
@@ -317,54 +320,23 @@ class ActiveLearner:
         """Fit the model with active data."""
         # Get new train and val sets
         meta_dict = self.meta_dict if self.meta_dict is not None else self.active_labels
+        keys_train, _, keys_val = do_stratified_splitting(
+            mapping_dict=self.pool_dataset.mapping_dict,
+            img_keys=list(self.active_labels.keys()),
+            splits=(self.train_size, 0.0, 1 - self.train_size),
+            random_state=self.random_state,
+            meta_dict=meta_dict,
+        )
+        train_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_train)
+        val_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_val)
 
-        if self.strategy == 'holdout':
-            if self.train_size is not None:
-                keys_train, _, keys_val = do_stratified_splitting(
-                    mapping_dict=self.pool_dataset.mapping_dict,
-                    img_keys=list(self.active_labels.keys()),
-                    splits=(self.train_size, 0.0, 1 - self.train_size),
-                    random_state=self.random_state,
-                    meta_dict=meta_dict,
-                )
-            else:
-                raise IOError('Using holdout splitting requires input for train size.')
-            train_dataset = modify_dataset(
-                dataset=self.labeled_dataset,
-                keys=keys_train,
-                extend=False,
-            )
-            val_dataset = modify_dataset(
-                dataset=self.labeled_dataset,
-                keys=keys_val,
-                extend=False,
-            )
-            self.trainer.reset_model()
-            self.trainer.fit(train_dataset, val_dataset)
+        # Train model
+        self.trainer.reset_model()
+        self.trainer.fit(train_dataset, val_dataset)
 
-        elif self.strategy == 'cv':
-            # TODO think about that, does that make sense?!
-            keys_train, keys_val = do_stratified_cv(
-                mapping_dict=self.pool_dataset.mapping_dict,
-                img_keys=list(self.active_labels.keys()),
-                folds=self.folds,
-                random_state=self.random_state,
-                meta_dict=meta_dict,
-            )
-            models = []
-            for k, _ in enumerate(keys_train):
-                self.trainer.reset_model()
-                train_dataset = modify_dataset(
-                    dataset=self.labeled_dataset,
-                    keys=keys_train[k],
-                    extend=False,
-                )
-                val_dataset = modify_dataset(
-                    dataset=self.labeled_dataset,
-                    keys=keys_val[k],
-                    extend=False,
-                )
-                models.append(self.trainer.fit(train_dataset, val_dataset))
+    def get_model(self) -> Model:
+        """Return current model instance."""
+        return self.trainer.get_model()
 
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
@@ -372,7 +344,7 @@ class ActiveLearner:
             print('No test dataset was specified. Evaluation is skipped.')
             return
 
-        metrics = self.evaluator.evaluate(self.trainer.model)
+        metrics = self.evaluator.evaluate(self.trainer.get_model())
 
         if self.test_logfile_path is not None:
             log = {}
@@ -382,6 +354,26 @@ class ActiveLearner:
             log.update({f'iteration {self.active_counter}': metrics})
             save_as_json(log, self.test_logfile_path)
 
-    def predict(self, dataset: WildlifeDataset) -> Dict[str, float]:
-        """Obtain predictions for a list of keys."""
+    def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
+        """Obtain bbox-level predictions."""
         return dict(zip(dataset.keys, self.trainer.predict(dataset)))
+
+    def predict_img(
+        self,
+        dataset: WildlifeDataset,
+        mapping_dict: Dict,
+        detector_file_path: str,
+    ) -> Dict:
+        """Obtain img-level predictions."""
+        preds_bboxes = self.trainer.predict(dataset)
+
+        detector_dict = load_json(detector_file_path)
+        removable_keys = set(mapping_dict) - set(dataset.keys)
+        for k in removable_keys:
+            del mapping_dict[k]
+        preds_img, _ = map_preds_to_img(
+            preds_bboxes=preds_bboxes,
+            mapping_dict=mapping_dict,
+            detector_dict=detector_dict,
+        )
+        return preds_img

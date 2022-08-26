@@ -58,7 +58,7 @@ def do_stratified_splitting(
         strat_var_array = np.array([strat_dict[k] for k in img_keys])
     else:
         strat_dict = {}
-        strat_var_array = np.empty(len(keys_array))
+        strat_var_array = np.ones(len(keys_array))
 
     # Split intro train and test keys
     sss_tt = StratifiedShuffleSplit(
@@ -80,7 +80,7 @@ def do_stratified_splitting(
             strat_dict_train = {k: v for k, v in strat_dict.items() if k in keys_train}
             strat_var_array = np.array([strat_dict_train[k] for k in keys_train])
         else:
-            strat_var_array = np.empty(len(keys_array))
+            strat_var_array = np.ones(len(keys_array))
         sss_tv = StratifiedShuffleSplit(
             n_splits=1,
             train_size=splits[0],
@@ -113,7 +113,7 @@ def do_stratified_cv(
         strat_dict = get_strat_dict(meta_dict)
         strat_var_array = np.array([strat_dict[k] for k in img_keys])
     else:
-        strat_var_array = np.empty(len(keys_array))
+        strat_var_array = np.ones(len(keys_array))
 
     if folds is None:
         raise ValueError('Please provide number of folds in cross-validation.')

@@ -147,6 +147,9 @@ def modify_dataset(
     new_dataset = deepcopy(dataset)
     new_keys = keys + new_dataset.keys if extend else keys
     new_dataset.set_keys(new_keys)
+    new_dataset.mapping_dict = {
+        k: v for k, v in new_dataset.mapping_dict.items() if k in new_keys
+    }
 
     if extend:
         if not all(x in dataset.detector_dict.keys() for x in keys):
