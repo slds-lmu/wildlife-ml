@@ -226,19 +226,10 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.random_state = random_state
         self.verbose = verbose
 
-        if transfer_epochs_per_trial is not None:
-            self.transfer_epochs_per_trial = transfer_epochs_per_trial
-        else:
-            self.transfer_epochs_per_trial = transfer_epochs
-        if finetune_epochs_per_trial is not None:
-            self.finetune_epochs_per_trial = finetune_epochs_per_trial
-        else:
-            self.finetune_epochs_per_trial = finetune_epochs
+        self.transfer_epochs_per_trial = transfer_epochs_per_trial or transfer_epochs
+        self.finetune_epochs_per_trial = finetune_epochs_per_trial or finetune_epochs
         self.max_concurrent_trials = max_concurrent_trials
-
-        if resources_per_trial is None:
-            resources_per_trial = {'cpu': 1}
-        self.resources_per_trial = resources_per_trial
+        self.resources_per_trial = resources_per_trial or {'cpu': 1}
         self.num_workers = num_workers
 
         self.search_algorithm = AlgorithmFactory.get(search_alg_id)(
@@ -317,6 +308,7 @@ class WildlifeTuningTrainer(BaseTrainer):
         self, config: Dict, train_dataset: Sequence, val_dataset: Sequence
     ) -> None:
         """Worker function for ray trials."""
+        print(config)
         trainer = WildlifeTrainer(
             batch_size=config['batch_size'],
             loss_func=self.loss_func,
