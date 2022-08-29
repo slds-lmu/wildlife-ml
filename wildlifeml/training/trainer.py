@@ -278,7 +278,6 @@ class WildlifeTuningTrainer(BaseTrainer):
                 self._fit_trial,
                 train_dataset=train_dataset,
                 val_dataset=val_dataset,
-                self=self,
             ),
             config=self.search_space,
             search_alg=self.search_algorithm,
