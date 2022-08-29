@@ -216,10 +216,10 @@ class WildlifeTuningTrainer(BaseTrainer):
         scheduler_alg_id: str = 'ashascheduler',
     ) -> None:
         """Initialize tuner object."""
-        if set(search_space) != set(TUNABLE):
+        if set(TUNABLE) != set(search_space):
             raise IOError(
-                f'Please provide search ranges for all hyperparameters in {TUNABLE}.'
-                f'To exclude a HP from tuning, specify a single choice.'
+                f'Please provide search ranges for all HP in {TUNABLE}. '
+                f'To exclude a HP from tuning, specify a single-element choice.'
             )
         self.search_space = search_space
         self.num_classes = num_classes
