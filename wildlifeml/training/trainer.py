@@ -237,7 +237,7 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.max_concurrent_trials = max_concurrent_trials
 
         if resources_per_trial is None:
-            resources_per_trial = {'cpu': 8}
+            resources_per_trial = {'cpu': 1}
         self.resources_per_trial = resources_per_trial
         self.num_workers = num_workers
 
@@ -276,8 +276,8 @@ class WildlifeTuningTrainer(BaseTrainer):
         analysis = ray.tune.run(
             ray.tune.with_parameters(
                 self._fit_trial,
-                dataset_train=train_dataset,
-                dataset_val=val_dataset,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
                 self=self,
             ),
             config=self.search_space,
