@@ -264,6 +264,7 @@ class WildlifeTuningTrainer(BaseTrainer):
 
     def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""
+        print(self.search_space)
         analysis = ray.tune.run(
             ray.tune.with_parameters(
                 self._fit_trial,
