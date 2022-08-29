@@ -13,7 +13,6 @@ from PIL import Image, ImageDraw
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
 from wildlifeml.utils.io import load_json
-from wildlifeml.utils.misc import flatten_list
 
 BBOX_SUFFIX_LEN: Final[int] = 4
 
@@ -45,7 +44,6 @@ def map_bbox_to_img(bbox_key: str) -> str:
 
 
 def do_stratified_splitting(
-    mapping_dict: Dict,
     img_keys: List[str],
     splits: Tuple[float, float, float],
     meta_dict: Optional[Dict] = None,
@@ -91,17 +89,10 @@ def do_stratified_splitting(
         keys_train = keys_array[idx_train].tolist()
         keys_val = keys_array[idx_val].tolist()
 
-    # Get keys on bbox level
-    print('---> Mapping image keys to bbox keys')
-    keys_train = [mapping_dict[k] for k in keys_train]
-    keys_val = [mapping_dict[k] for k in keys_val]
-    keys_test = [mapping_dict[k] for k in keys_test]
-
-    return flatten_list(keys_train), flatten_list(keys_val), flatten_list(keys_test)
+    return keys_train, keys_val, keys_test
 
 
 def do_stratified_cv(
-    mapping_dict: Dict,
     img_keys: List[str],
     folds: Optional[int],
     meta_dict: Optional[Dict],
@@ -127,12 +118,10 @@ def do_stratified_cv(
     print('---> Mapping image keys to bbox keys')
     for i, _ in enumerate(idx_train):
         slice_keys = keys_array[idx_train[i]].tolist()
-        keys_new = [mapping_dict[k] for k in slice_keys]
-        keys_train.append(flatten_list(keys_new))
+        keys_train.append(slice_keys)
     for i, _ in enumerate(idx_test):
         slice_keys = keys_array[idx_test[i]].tolist()
-        keys_new = [mapping_dict[k] for k in slice_keys]
-        keys_test.append(flatten_list(keys_new))
+        keys_test.append(slice_keys)
 
     return keys_train, keys_test
 

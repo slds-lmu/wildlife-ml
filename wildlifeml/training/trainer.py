@@ -21,6 +21,7 @@ from wildlifeml.data import map_bbox_to_img, modify_dataset
 from wildlifeml.training.algorithms import AlgorithmFactory
 from wildlifeml.training.models import ModelFactory
 from wildlifeml.utils.datasets import do_stratified_cv
+from wildlifeml.utils.misc import flatten_list
 
 
 class BaseTrainer(ABC):
@@ -386,7 +387,6 @@ class WildlifeTuningTrainer(BaseTrainer):
         for index_run in range(n_runs):
 
             keys_train, keys_val = do_stratified_cv(
-                mapping_dict=dataset.mapping_dict,
                 img_keys=img_keys,
                 folds=folds,
                 meta_dict={k: {'label': v} for k, v in dataset.label_dict.items()},
@@ -394,9 +394,17 @@ class WildlifeTuningTrainer(BaseTrainer):
 
             for index_fold in range(folds):
                 dataset_train = modify_dataset(
-                    dataset=dataset, keys=keys_train[index_fold]
+                    dataset=dataset,
+                    keys=flatten_list(
+                        [dataset.mapping_dict[k] for k in keys_train[index_fold]]
+                    ),
                 )
-                dataset_val = modify_dataset(dataset=dataset, keys=keys_val[index_fold])
+                dataset_val = modify_dataset(
+                    dataset=dataset,
+                    keys=flatten_list(
+                        [dataset.mapping_dict[k] for k in keys_val[index_fold]]
+                    ),
+                )
 
                 transfer_earlystop = EarlyStopping(
                     monitor=self.objective, patience=patience, mode=self.mode

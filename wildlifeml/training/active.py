@@ -27,6 +27,7 @@ from wildlifeml.utils.io import (
     save_as_csv,
     save_as_json,
 )
+from wildlifeml.utils.misc import flatten_list
 
 
 class ActiveLearner:
@@ -321,14 +322,21 @@ class ActiveLearner:
         # Get new train and val sets
         meta_dict = self.meta_dict if self.meta_dict is not None else self.active_labels
         keys_train, _, keys_val = do_stratified_splitting(
-            mapping_dict=self.pool_dataset.mapping_dict,
             img_keys=list(self.active_labels.keys()),
             splits=(self.train_size, 0.0, 1 - self.train_size),
             random_state=self.random_state,
             meta_dict=meta_dict,
         )
-        train_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_train)
-        val_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_val)
+        train_dataset = modify_dataset(
+            dataset=self.labeled_dataset,
+            keys=flatten_list(
+                [self.labeled_dataset.mapping_dict[k] for k in keys_train]
+            ),
+        )
+        val_dataset = modify_dataset(
+            dataset=self.labeled_dataset,
+            keys=flatten_list([self.labeled_dataset.mapping_dict[k] for k in keys_val]),
+        )
 
         # Train model
         self.trainer.reset_model()
