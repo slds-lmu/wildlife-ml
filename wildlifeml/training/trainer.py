@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from typing import (
     Any,
     Dict,
+    Final,
     List,
     Optional,
     Tuple,
@@ -22,6 +23,13 @@ from wildlifeml.training.algorithms import AlgorithmFactory
 from wildlifeml.training.models import ModelFactory
 from wildlifeml.utils.datasets import do_stratified_cv
 from wildlifeml.utils.misc import flatten_list
+
+TUNABLE: Final[List[str]] = [
+    'batch_size',
+    'transfer_learning_rate',
+    'finetune_learning_rate',
+    'backbone',
+]
 
 
 class BaseTrainer(ABC):
@@ -208,6 +216,11 @@ class WildlifeTuningTrainer(BaseTrainer):
         scheduler_alg_id: str = 'ashascheduler',
     ) -> None:
         """Initialize tuner object."""
+        if set(search_space) != set(TUNABLE):
+            raise IOError(
+                f'Please provide search ranges for all hyperparameters in {TUNABLE}.'
+                f'To exclude a HP from tuning, specify a single choice.'
+            )
         self.search_space = search_space
         self.num_classes = num_classes
         self.transfer_epochs = transfer_epochs
@@ -264,7 +277,6 @@ class WildlifeTuningTrainer(BaseTrainer):
 
     def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
         """Fit the model on the provided dataset."""
-        print(self.search_space)
         analysis = ray.tune.run(
             ray.tune.with_parameters(
                 self._fit_trial,
@@ -294,14 +306,16 @@ class WildlifeTuningTrainer(BaseTrainer):
                 transfer_epochs=self.transfer_epochs,
                 finetune_epochs=self.finetune_epochs,
                 transfer_optimizer=Adam(self.optimal_config['transfer_learning_rate']),
-                finetune_optimizer=Adam(self.optimal_config['finetune_learning_rate']),
+                finetune_optimizer=Adam(self.optimal_config['transfer_learning_rate']),
                 finetune_layers=self.finetune_layers,
-                model_backbone=self.optimal_config['model_backbone'],
+                model_backbone=self.optimal_config['backbone'],
                 transfer_callbacks=self.transfer_callbacks,
                 finetune_callbacks=self.finetune_callbacks,
                 num_workers=self.num_workers,
                 eval_metrics=self.eval_metrics,
             )
+            train_dataset.batch_size = self.optimal_config['batch_size']
+            val_dataset.batch_size = self.optimal_config['batch_size']
             self.model = optimal_trainer.fit(train_dataset, val_dataset)
             return self.model
 
@@ -309,7 +323,7 @@ class WildlifeTuningTrainer(BaseTrainer):
         self, config: Dict, train_dataset: Sequence, val_dataset: Sequence
     ) -> None:
         """Worker function for ray trials."""
-        print(config)
+        # Set current HP configs (if being tuned)
         trainer = WildlifeTrainer(
             batch_size=config['batch_size'],
             loss_func=self.loss_func,
@@ -319,7 +333,7 @@ class WildlifeTuningTrainer(BaseTrainer):
             transfer_optimizer=Adam(config['transfer_learning_rate']),
             finetune_optimizer=Adam(config['finetune_learning_rate']),
             finetune_layers=self.finetune_layers,
-            model_backbone=config['model_backbone'],
+            model_backbone=config['backbone'],
             transfer_callbacks=[TuneReportCallback(metrics=self.report_metrics)],
             finetune_callbacks=[TuneReportCallback(metrics=self.report_metrics)],
             num_workers=self.num_workers,
