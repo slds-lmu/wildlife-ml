@@ -263,11 +263,6 @@ class WildlifeTuningTrainer(BaseTrainer):
         else:
             self.report_metrics = {}
 
-        # if transfer_epochs == 0:
-        #     self.search_space.pop('transfer_learning_rate')
-        # if finetune_epochs == 0:
-        #     self.search_space.pop('finetune_learning_rate')
-
         self.optimal_config: Optional[Dict] = None
         self.model: Optional[Model] = None
 
