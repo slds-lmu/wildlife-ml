@@ -1,6 +1,7 @@
 """Classes and functions for Active Learning."""
 import os
 import random
+from copy import deepcopy
 from typing import (
     Dict,
     List,
@@ -9,7 +10,7 @@ from typing import (
 
 from tensorflow.keras import Model
 
-from wildlifeml.data import WildlifeDataset, modify_dataset
+from wildlifeml.data import WildlifeDataset, subset_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
 from wildlifeml.training.evaluator import Evaluator
@@ -53,13 +54,9 @@ class ActiveLearner:
     ) -> None:
         """Instantiate an ActiveLearner object."""
         self.pool_dataset = pool_dataset
-        self.labeled_dataset = WildlifeDataset(
-            keys=[],
-            image_dir='',
-            detector_file_path='',
-            bbox_map={},
-            batch_size=0,
-        )
+        self.unlabeled_dataset = deepcopy(self.pool_dataset)
+        self.labeled_dataset = subset_dataset(self.pool_dataset, keys=[])
+
         self.dir_img = self.pool_dataset.img_dir
         self.dir_act = active_directory
 
@@ -165,7 +162,7 @@ class ActiveLearner:
                 f'For this fresh start, {self.al_batch_size} images are randomly '
                 f'chosen from your unlabeled dataset.'
             )
-            all_keys = self.pool_dataset.keys
+            all_keys = self.unlabeled_dataset.keys
             if self.random_state is not None:
                 random.seed(self.random_state)
             staging_keys = random.sample(all_keys, self.al_batch_size)
@@ -185,6 +182,7 @@ class ActiveLearner:
             self.al_batch_size = state['al_batch_size']
             self.dir_act = state['active_directory']
             self.random_state = state['random_state']
+            self.unlabeled_dataset = state['unlabeled_dataset']
             self.active_labels = state['active_labels']
             self.labeled_dataset = state['labeled_dataset']
             self.active_counter = state['active_counter']
@@ -210,6 +208,7 @@ class ActiveLearner:
             'active_directory': self.dir_act,
             'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
+            'unlabeled_dataset': self.unlabeled_dataset,
             'active_labels': self.active_labels,
             'labeled_dataset': self.labeled_dataset,
             'active_counter': self.active_counter,
@@ -301,15 +300,19 @@ class ActiveLearner:
             target=self.label_file_path,
         )
 
-        # Update pool and labeled datasets, omitting mixed-class imgs for training
-        self.labeled_dataset = modify_dataset(
-            dataset=self.pool_dataset,
-            new_label_dict={k: v for k, v in labels_supplied.items() if v != -2},
-            extend=True,
+        # Update datasets, omitting mixed-class imgs for training
+        img_keys_labeled = [k for k, v in labels_existing.items() if v != -2]
+        bbox_keys_labeled = flatten_list(
+            [self.pool_dataset.mapping_dict[k] for k in img_keys_labeled]
         )
-        self.pool_dataset = modify_dataset(
-            dataset=self.pool_dataset,
-            keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
+        bbox_keys_unlabeled = list(
+            set(self.unlabeled_dataset.keys) - set(bbox_keys_labeled)
+        )
+        self.labeled_dataset = subset_dataset(self.pool_dataset, bbox_keys_labeled)
+        self.labeled_dataset.label_dict = labels_existing
+        self.labeled_dataset.is_supervised = True
+        self.unlabeled_dataset = subset_dataset(
+            self.unlabeled_dataset, bbox_keys_unlabeled
         )
 
         # Wipe staging area
@@ -327,15 +330,13 @@ class ActiveLearner:
             random_state=self.random_state,
             meta_dict=meta_dict,
         )
-        train_dataset = modify_dataset(
-            dataset=self.labeled_dataset,
-            keys=flatten_list(
-                [self.labeled_dataset.mapping_dict[k] for k in keys_train]
-            ),
+        train_dataset = subset_dataset(
+            self.labeled_dataset,
+            flatten_list([self.labeled_dataset.mapping_dict[k] for k in keys_train]),
         )
-        val_dataset = modify_dataset(
-            dataset=self.labeled_dataset,
-            keys=flatten_list([self.labeled_dataset.mapping_dict[k] for k in keys_val]),
+        val_dataset = subset_dataset(
+            self.labeled_dataset,
+            flatten_list([self.labeled_dataset.mapping_dict[k] for k in keys_val]),
         )
 
         # Train model

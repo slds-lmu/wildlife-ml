@@ -13,7 +13,7 @@ from tensorflow.keras import Model
 from wildlifeml.data import (
     BBoxMapper,
     WildlifeDataset,
-    modify_dataset,
+    subset_dataset,
 )
 from wildlifeml.utils.datasets import map_bbox_to_img, map_preds_to_img
 from wildlifeml.utils.io import load_csv, load_json
@@ -55,7 +55,7 @@ class Evaluator:
         self.bbox_keys = list(set(dataset.keys) - set(self.empty_keys))
 
         # Only register samples that are not filtered by MD
-        self.dataset = modify_dataset(dataset, keys=self.bbox_keys)
+        self.dataset = subset_dataset(dataset, keys=self.bbox_keys)
         self.dataset.shuffle = False
 
         # Dirty fix for determining which Keras class predictions

@@ -17,7 +17,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 
-from wildlifeml.data import map_bbox_to_img, modify_dataset
+from wildlifeml.data import map_bbox_to_img, subset_dataset
 from wildlifeml.training.algorithms import AlgorithmFactory
 from wildlifeml.training.models import ModelFactory
 from wildlifeml.utils.datasets import do_stratified_cv
@@ -393,15 +393,15 @@ class WildlifeTuningTrainer(BaseTrainer):
             )
 
             for index_fold in range(folds):
-                dataset_train = modify_dataset(
-                    dataset=dataset,
-                    keys=flatten_list(
+                dataset_train = subset_dataset(
+                    dataset,
+                    flatten_list(
                         [dataset.mapping_dict[k] for k in keys_train[index_fold]]
                     ),
                 )
-                dataset_val = modify_dataset(
-                    dataset=dataset,
-                    keys=flatten_list(
+                dataset_val = subset_dataset(
+                    dataset,
+                    flatten_list(
                         [dataset.mapping_dict[k] for k in keys_val[index_fold]]
                     ),
                 )

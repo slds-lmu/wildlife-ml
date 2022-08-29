@@ -132,40 +132,10 @@ class WildlifeDataset(Sequence):
         return np.stack(imgs).astype(float), labels
 
 
-def modify_dataset(
-    dataset: WildlifeDataset,
-    extend: bool = False,
-    keys: Optional[List[str]] = None,
-    new_label_dict: Optional[Dict] = None,
-) -> WildlifeDataset:
-    """Clone a WildlifeDataset object and extend or subset."""
-    if keys is None:
-        if new_label_dict is None:
-            raise IOError('You need to provide either keys or a label dictionary.')
-        keys = list(new_label_dict.keys())
-
+def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset:
+    """Clone and subset a WildlifeDataset object."""
     new_dataset = deepcopy(dataset)
-    new_keys = keys + new_dataset.keys if extend else keys
-    new_dataset.set_keys(new_keys)
-    new_dataset.mapping_dict = {
-        k: v for k, v in new_dataset.mapping_dict.items() if k in new_keys
-    }
-
-    if extend:
-        if not all(x in dataset.detector_dict.keys() for x in keys):
-            raise ValueError('No Megadetector results found for provided keys.')
-        if dataset.is_supervised:
-            if new_label_dict is None:
-                raise ValueError(
-                    'You are attempting to extend a supervised dataset. '
-                    'Please provide labels for keys to be appended.'
-                )
-            new_dataset.label_dict.update(new_label_dict)
-
-    else:
-        if not dataset.is_supervised and new_label_dict is not None:
-            new_dataset.label_dict.update(new_label_dict)
-            new_dataset.is_supervised = True
+    new_dataset.set_keys(keys)
 
     return new_dataset
 
