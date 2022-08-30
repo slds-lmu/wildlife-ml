@@ -72,7 +72,7 @@ class Evaluator:
         # voting via confidence and softmax scores in the evaluate phase. Consider
         # images that are filtered out by the MD with confidence 1.0.
         self.empty_pred_arr = np.zeros(
-            len(self.empty_keys), num_classes, dtype=np.float
+            shape=(len(self.empty_keys), num_classes), dtype=np.float
         )
         self.empty_pred_arr[:, self.empty_class_id] = 1.0
 
