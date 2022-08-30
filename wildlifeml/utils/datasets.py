@@ -1,4 +1,5 @@
 """Utilities related to WildlifeDatasets."""
+
 from typing import (
     Any,
     Dict,
@@ -173,25 +174,25 @@ def separate_empties(
 
 
 def map_preds_to_img(
-    preds_bboxes: np.ndarray,
+    preds: np.ndarray,
+    bbox_keys: List[str],
     mapping_dict: Dict,
     detector_dict: Dict,
-) -> Tuple[Dict[Any, np.ndarray], List[int]]:
+) -> Dict[Any, np.ndarray]:
     """Map predictions on bbox level back to img level."""
-    num_classes = preds_bboxes.shape[1]
-    keys_idx = {k: i for i, k in enumerate(mapping_dict.keys())}
-    confs = np.asarray([detector_dict[k]['conf'] for k in mapping_dict.keys()])
+    num_classes = preds.shape[1]
+    confs = np.asarray([detector_dict[k]['conf'] for k in bbox_keys])
     confs = confs[..., np.newaxis]
-    preds_bboxes *= confs
+    preds_bboxes = preds * confs
+    preds_bboxes_dict = {j: preds_bboxes[i, ...] for i, j in enumerate(bbox_keys)}
     preds_imgs = {}
     hard_labels = []
 
     for img, bbox_list in mapping_dict.items():
         pred = np.zeros(num_classes, dtype=np.float)
         for bbox in bbox_list:
-            idx = keys_idx[bbox]
-            pred += preds_bboxes[idx]
+            pred += preds_bboxes_dict[bbox]
         preds_imgs.update({img: pred})
         hard_labels.append(np.argmax(pred)[0])
 
-    return preds_imgs, hard_labels
+    return preds_imgs

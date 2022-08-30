@@ -91,16 +91,17 @@ class Evaluator:
         # final prediction.
 
         # Aggregate empty and bbox predictions
-        all_keys_idx = {k: i for i, k in enumerate(self.empty_keys + self.bbox_keys)}
         all_preds = np.concatenate([self.empty_pred_arr, preds])
 
         # Compute majority voting predictions on image level
-        _, y_preds = map_preds_to_img(
-            preds_bboxes=all_preds,
+        preds_imgs = map_preds_to_img(
+            bbox_keys=self.empty_keys + self.bbox_keys,
+            preds=all_preds,
             mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
         )
-        y_trues = [self.label_dict[k] for k in all_keys_idx]
+        y_preds = [np.argmax(v) for v in preds_imgs.values()]
+        y_trues = [self.label_dict[k] for k in preds_imgs.keys()]
 
         # Compute metrics on final predictions
         metrics = Evaluator.compute_metrics(np.asarray(y_trues), np.asarray(y_preds))
