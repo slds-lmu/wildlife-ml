@@ -290,6 +290,7 @@ class WildlifeTuningTrainer(BaseTrainer):
             resources_per_trial=self.resources_per_trial,
             max_concurrent_trials=self.max_concurrent_trials,
         )
+        breakpoint()
         self.optimal_config = analysis.best_config
         if self.optimal_config is None:
             raise ValueError('Tuning produced no optimal configuration.')
