@@ -162,7 +162,7 @@ def separate_empties(
         keys_empty.append(
             [
                 k
-                for k in detector_dict.keys()
+                for k in (set(detector_dict.keys()) - set(keys_empty))
                 if detector_dict[k].get('conf') < conf_threshold
             ]
         )
@@ -181,7 +181,7 @@ def map_preds_to_img(
 ) -> Dict[Any, np.ndarray]:
     """Map predictions on bbox level back to img level."""
     num_classes = preds.shape[1]
-    confs = np.asarray([detector_dict[k]['conf'] for k in bbox_keys])
+    confs = np.asarray([detector_dict[k].get('conf') or 0.0 for k in bbox_keys])
     confs = confs[..., np.newaxis]
     preds_bboxes = preds * confs
     preds_bboxes_dict = {j: preds_bboxes[i, ...] for i, j in enumerate(bbox_keys)}
