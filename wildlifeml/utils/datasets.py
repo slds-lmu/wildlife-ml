@@ -165,7 +165,7 @@ def separate_empties(
             if detector_dict[k].get('conf') < conf_threshold
         ]
         if len(below_threshold) > 0:
-            keys_empty.append(below_threshold)
+            keys_empty.extend(below_threshold)
 
     keys_nonempty = list(set(detector_dict.keys()) - set(keys_empty))
     return keys_empty, keys_nonempty
