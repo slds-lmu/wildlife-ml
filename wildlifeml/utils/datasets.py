@@ -159,14 +159,14 @@ def separate_empties(
         k for k in detector_dict.keys() if detector_dict[k].get('category') == -1
     ]
     if conf_threshold is not None:
-        keys_empty.append(
-            [
-                k
-                for k in (set(detector_dict.keys()) - set(keys_empty))
-                if detector_dict[k].get('conf') < conf_threshold
-            ]
-        )
-    breakpoint()
+        below_threshold = [
+            k
+            for k in (set(detector_dict.keys()) - set(keys_empty))
+            if detector_dict[k].get('conf') < conf_threshold
+        ]
+        if len(below_threshold) > 0:
+            keys_empty.append(below_threshold)
+
     keys_nonempty = list(set(detector_dict.keys()) - set(keys_empty))
     return keys_empty, keys_nonempty
 
