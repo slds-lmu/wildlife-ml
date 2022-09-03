@@ -15,7 +15,11 @@ from wildlifeml.data import (
     WildlifeDataset,
     subset_dataset,
 )
-from wildlifeml.utils.datasets import map_bbox_to_img, map_preds_to_img
+from wildlifeml.utils.datasets import (
+    map_bbox_to_img,
+    map_preds_to_img,
+    separate_empties,
+)
 from wildlifeml.utils.io import load_csv, load_json
 
 
@@ -29,6 +33,7 @@ class Evaluator:
         dataset: WildlifeDataset,
         num_classes: int,
         empty_class_id: Optional[int] = None,
+        conf_threshold: Optional[float] = None,
         batch_size: int = 64,
     ) -> None:
         """Initialize evaluator object."""
@@ -36,6 +41,7 @@ class Evaluator:
         self.label_dict = {key: float(val) for key, val in load_csv(label_file_path)}
         self.batch_size = batch_size
         self.num_classes = num_classes
+        self.conf_threshold = conf_threshold
 
         # Index what images are contained in the eval dataset
         self.dataset_imgs = set([map_bbox_to_img(k) for k in dataset.keys])
@@ -46,10 +52,9 @@ class Evaluator:
         for k in removable_keys:
             del self.bbox_map[k]
 
-        # Get keys that have no detected bbox from the MD
-        self.empty_keys = [
-            k for k in dataset.keys if self.detector_dict[k]['category'] == -1
-        ]
+        # Get keys that have no detected bbox from the MD, with optional new threshold
+        empty_keys_md, _ = separate_empties(detector_file_path, self.conf_threshold)
+        self.empty_keys = [k for k in dataset.keys if k in empty_keys_md]
 
         # Remove keys from dataset where MD detects no bbox
         self.bbox_keys = list(set(dataset.keys) - set(self.empty_keys))
@@ -102,9 +107,12 @@ class Evaluator:
         )
         y_preds = [np.argmax(v) for v in preds_imgs.values()]
         y_trues = [self.label_dict[k] for k in preds_imgs.keys()]
+        y_trues = [self.label_dict[k] for k in preds_imgs.keys()]
 
         # Compute metrics on final predictions
-        metrics = Evaluator.compute_metrics(np.asarray(y_trues), np.asarray(y_preds))
+        metrics = Evaluator.compute_metrics(
+            self, y_true=np.asarray(y_trues), y_pred=np.asarray(y_preds)
+        )
 
         # Lastly, add keras metrics
         keras_metrics = {zip(model.metrics_names, model.evaluate(self.dataset))}
@@ -119,8 +127,7 @@ class Evaluator:
 
         return metrics
 
-    @staticmethod
-    def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
+    def compute_metrics(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
         """Compute eval metrics for predictions."""
         acc = accuracy_score(y_true=y_true, y_pred=y_pred)
         prec = precision_score(
@@ -141,5 +148,29 @@ class Evaluator:
             average='macro',
             zero_division=0,
         )
+        tp, tn, fp, fn = 0, 0, 0, 0
+        for true, pred in zip(y_true, y_pred):
+            if true == self.empty_class_id:
+                if true == pred:
+                    tn += 1
+                else:
+                    fp += 1
+            else:
+                if pred == self.empty_class_id:
+                    fn += 1
+                else:
+                    tp += 1
+        conf_empty = {
+            'tnr': tn / (tn + fp) if (tn + fp) > 0 else 0.0,
+            'tpr': tp / (tp + fn) if (tp + fn) > 0 else 0.0,
+            'fnr': fn / (tp + fn) if (tp + fn) > 0 else 0.0,
+            'fpr': fp / (tn + fp) if (tn + fp) > 0 else 0.0,
+        }
 
-        return {'acc': acc, 'prec': prec, 'rec': rec, 'f1': f1}
+        return {
+            'acc': acc,
+            'prec': prec,
+            'rec': rec,
+            'f1': f1,
+            'conf_empty': conf_empty,
+        }
