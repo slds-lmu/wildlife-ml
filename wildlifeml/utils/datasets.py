@@ -196,6 +196,6 @@ def map_preds_to_img(
             if bbox in preds_bboxes_dict.keys():
                 pred += preds_bboxes_dict[bbox]
         preds_imgs.update({img: pred})
-        hard_labels.append(np.argmax(pred)[0])
+        hard_labels.append(np.argmax(pred))
 
     return preds_imgs
