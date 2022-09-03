@@ -186,13 +186,15 @@ def map_preds_to_img(
     confs = confs[..., np.newaxis]
     preds_bboxes = preds * confs
     preds_bboxes_dict = {j: preds_bboxes[i, ...] for i, j in enumerate(bbox_keys)}
+
     preds_imgs = {}
     hard_labels = []
 
     for img, bbox_list in mapping_dict.items():
         pred = np.zeros(num_classes, dtype=np.float)
         for bbox in bbox_list:
-            pred += preds_bboxes_dict[bbox]
+            if bbox in preds_bboxes_dict.keys():
+                pred += preds_bboxes_dict[bbox]
         preds_imgs.update({img: pred})
         hard_labels.append(np.argmax(pred)[0])
 
