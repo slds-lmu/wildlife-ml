@@ -134,6 +134,7 @@ def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
 
     else:
         lengths = [len(v) for v in meta_dict.values()]
+        breakpoint()
         if len(set(lengths)) > 1:
             raise ValueError(
                 'All variables provided for stratification must have the same number '
