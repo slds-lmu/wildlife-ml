@@ -133,16 +133,16 @@ def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
         return {}
 
     else:
+        strat_dict = {}
         lengths = [len(v) for v in meta_dict.values()]
         if len(set(lengths)) > 1:
             raise ValueError(
                 'All variables provided for stratification must have the same number '
                 'of elements.'
             )
-        strat_dict = {
-            k: '_'.join([str(v) for v in meta_dict[k].values()])
-            for k in meta_dict.keys()
-        }
+        for k in meta_dict.keys():
+            concat = '_'.join([str(v) for v in meta_dict[k].values()])
+            strat_dict.update({k: concat})
         return strat_dict
 
 

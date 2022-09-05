@@ -107,7 +107,6 @@ class Evaluator:
         )
         y_preds = [np.argmax(v) for v in preds_imgs.values()]
         y_trues = [self.label_dict[k] for k in preds_imgs.keys()]
-        y_trues = [self.label_dict[k] for k in preds_imgs.keys()]
 
         # Compute metrics on final predictions
         metrics = Evaluator.compute_metrics(
