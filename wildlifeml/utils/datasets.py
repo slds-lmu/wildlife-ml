@@ -75,7 +75,7 @@ def do_stratified_splitting(
         idx_test = random.sample(
             list(keys_array), int(np.ceil(splits[2] * len(keys_array)))
         )
-        idx_train = list(set(keys_array) - set(idx_test))
+        idx_train = np.array(list(set(keys_array) - set(idx_test)))
     keys_train = keys_array[idx_train].tolist()
     keys_test = keys_array[idx_test].tolist()
     keys_val = []
@@ -101,7 +101,7 @@ def do_stratified_splitting(
             idx_val = random.sample(
                 list(keys_array), int(np.ceil(splits[1] * len(keys_array)))
             )
-            idx_train = list(set(keys_array) - set(idx_val))
+            idx_train = np.array(list(set(keys_array) - set(idx_val)))
         keys_train = keys_array[idx_train].tolist()
         keys_val = keys_array[idx_val].tolist()
 
