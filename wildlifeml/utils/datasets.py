@@ -58,6 +58,7 @@ def do_stratified_splitting(
     else:
         strat_dict = {}
         strat_var_array = np.ones(len(keys_array))
+    breakpoint()
 
     # Split intro train and test keys
     sss_tt = StratifiedShuffleSplit(
