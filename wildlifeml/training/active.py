@@ -353,7 +353,7 @@ class ActiveLearner:
             print('No test dataset was specified. Evaluation is skipped.')
             return
 
-        metrics = self.evaluator.evaluate(self.trainer.get_model())
+        metrics = self.evaluator.evaluate(self.trainer)
 
         if self.test_logfile_path is not None:
             log = {}

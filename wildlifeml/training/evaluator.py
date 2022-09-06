@@ -8,13 +8,13 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from tensorflow.keras import Model
 
 from wildlifeml.data import (
     BBoxMapper,
     WildlifeDataset,
     subset_dataset,
 )
+from wildlifeml.training.trainer import BaseTrainer
 from wildlifeml.utils.datasets import (
     map_bbox_to_img,
     map_preds_to_img,
@@ -81,14 +81,10 @@ class Evaluator:
         )
         self.empty_pred_arr[:, self.empty_class_id] = 1.0
 
-    def evaluate(
-        self,
-        model: Model,
-        verbose: bool = True,
-    ) -> Dict:
+    def evaluate(self, trainer: BaseTrainer, verbose: bool = True) -> Dict:
         """Obtain metrics for a supplied model."""
         # Get predictions for bboxs
-        preds = model.predict(self.dataset)
+        preds = trainer.predict(self.dataset)
 
         # Above predictions are on bbox level, but image level prediction is desired.
         # For this every prediction is reweighted with the MD confidence score.
@@ -114,7 +110,14 @@ class Evaluator:
         )
 
         # Lastly, add keras metrics
-        keras_metrics = {zip(model.metrics_names, model.evaluate(self.dataset))}
+
+        trainer.compile_model()
+        keras_metrics = {
+            zip(
+                trainer.get_model().eval_metrics,
+                trainer.get_model().evaluate(self.dataset),
+            )
+        }
         metrics.update({'keras_metrics': keras_metrics})
 
         if verbose:

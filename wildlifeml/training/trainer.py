@@ -46,6 +46,11 @@ class BaseTrainer(ABC):
         pass
 
     @abstractmethod
+    def compile_model(self) -> None:
+        """Compile the model for evaluation."""
+        pass
+
+    @abstractmethod
     def reset_model(self) -> None:
         """Set model to initial state as obtained from model factory."""
         pass
@@ -167,6 +172,14 @@ class WildlifeTrainer(BaseTrainer):
         """Return the model instance."""
         return self.model
 
+    def compile_model(self) -> None:
+        """Compile model for evaluation."""
+        self.model.compile(
+            optimizer=self.transfer_optimizer,
+            loss=self.loss_func,
+            metrics=self.eval_metrics,
+        )
+
     def reset_model(self) -> None:
         """Set model to initial state as obtained from model factory."""
         self.model = ModelFactory.get(
@@ -197,6 +210,8 @@ class WildlifeTuningTrainer(BaseTrainer):
         transfer_epochs: int,
         finetune_epochs: int,
         finetune_layers: int,
+        transfer_optimizer: Any,
+        finetune_optimizer: Any,
         num_workers: int = 0,
         transfer_callbacks: Optional[List] = None,
         finetune_callbacks: Optional[List] = None,
@@ -225,6 +240,8 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.num_classes = num_classes
         self.transfer_epochs = transfer_epochs
         self.finetune_epochs = finetune_epochs
+        self.transfer_optimizer = transfer_optimizer
+        self.finetune_optimizer = finetune_optimizer
         self.finetune_layers = finetune_layers
         self.transfer_callbacks = transfer_callbacks
         self.finetune_callbacks = finetune_callbacks
@@ -294,14 +311,20 @@ class WildlifeTuningTrainer(BaseTrainer):
         if self.optimal_config is None:
             raise ValueError('Tuning produced no optimal configuration.')
         else:
+            self.transfer_optimizer.learning_rate = self.optimal_config[
+                'transfer_learning_rate'
+            ]
+            self.finetune_optimizer.learning_rate = self.optimal_config[
+                'finetune_learning_rate'
+            ]
             optimal_trainer = WildlifeTrainer(
                 batch_size=self.optimal_config['batch_size'],
                 loss_func=self.loss_func,
                 num_classes=self.num_classes,
                 transfer_epochs=self.transfer_epochs,
                 finetune_epochs=self.finetune_epochs,
-                transfer_optimizer=Adam(self.optimal_config['transfer_learning_rate']),
-                finetune_optimizer=Adam(self.optimal_config['transfer_learning_rate']),
+                transfer_optimizer=self.transfer_optimizer,
+                finetune_optimizer=self.finetune_optimizer,
                 finetune_layers=self.finetune_layers,
                 model_backbone=self.optimal_config['backbone'],
                 transfer_callbacks=self.transfer_callbacks,
@@ -343,6 +366,16 @@ class WildlifeTuningTrainer(BaseTrainer):
         if self.model is None:
             raise ValueError('There is no model yet. Please fit the trainer.')
         return self.model
+
+    def compile_model(self) -> None:
+        """Compile model for evaluation."""
+        if self.model is None:
+            raise ValueError('There is no model yet. Please fit the trainer.')
+        self.model.compile(
+            optimizer=self.transfer_optimizer,
+            loss=self.loss_func,
+            metrics=self.eval_metrics,
+        )
 
     def reset_model(self) -> None:
         """Set model to initial state as obtained from model factory."""
