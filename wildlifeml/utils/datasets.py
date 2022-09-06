@@ -62,7 +62,6 @@ def do_stratified_splitting(
     # Split intro train and test keys
     sss_tt = StratifiedShuffleSplit(
         n_splits=1,
-        train_size=splits[0] + splits[1],
         test_size=splits[2],
         random_state=random_state,
     )
@@ -82,7 +81,6 @@ def do_stratified_splitting(
             strat_var_array = np.ones(len(keys_array))
         sss_tv = StratifiedShuffleSplit(
             n_splits=1,
-            train_size=splits[0],
             test_size=splits[1],
             random_state=random_state,
         )
