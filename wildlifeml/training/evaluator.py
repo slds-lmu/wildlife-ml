@@ -54,7 +54,7 @@ class Evaluator:
 
         # Get keys that have no detected bbox from the MD, with optional new threshold
         empty_keys_md, _ = separate_empties(detector_file_path, self.conf_threshold)
-        self.empty_keys = [k for k in dataset.keys if k in empty_keys_md]
+        self.empty_keys = list(set(dataset.keys).intersection(set(empty_keys_md)))
 
         # Remove keys from dataset where MD detects no bbox
         self.bbox_keys = list(set(dataset.keys) - set(self.empty_keys))

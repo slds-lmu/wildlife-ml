@@ -184,6 +184,7 @@ def map_preds_to_img(
     num_classes = preds.shape[1]
     confs = np.asarray([detector_dict[k].get('conf') or 0.0 for k in bbox_keys])
     confs = confs[..., np.newaxis]
+    breakpoint()
     preds_bboxes = preds * confs
     preds_bboxes_dict = {j: preds_bboxes[i, ...] for i, j in enumerate(bbox_keys)}
 
