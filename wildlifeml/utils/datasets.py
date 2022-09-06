@@ -72,6 +72,7 @@ def do_stratified_splitting(
     except ValueError:
         print('Too little class support for stratication, using random splits.')
         random.seed(random_state)
+        breakpoint()
         idx_test = random.sample(list(keys_array), np.ceil(splits[2] * len(keys_array)))
         idx_train = list(set(keys_array) - set(idx_test))
     keys_train = keys_array[idx_train].tolist()
