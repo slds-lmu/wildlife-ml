@@ -1,5 +1,6 @@
 """Utilities related to WildlifeDatasets."""
 
+import random
 from typing import (
     Any,
     Dict,
@@ -66,7 +67,13 @@ def do_stratified_splitting(
         random_state=random_state,
     )
     print('---> Performing stratified split')
-    idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
+    try:
+        idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
+    except ValueError:
+        print('Too little class support for stratication, using random splits.')
+        random.seed(random_state)
+        idx_test = random.sample(keys_array, np.ceil(splits[2] * len(keys_array)))
+        idx_train = list(set(keys_array) - set(idx_test))
     keys_train = keys_array[idx_train].tolist()
     keys_test = keys_array[idx_test].tolist()
     keys_val = []
@@ -84,7 +91,13 @@ def do_stratified_splitting(
             test_size=splits[1],
             random_state=random_state,
         )
-        idx_train, idx_val = next(iter(sss_tv.split(keys_array, strat_var_array)))
+        try:
+            idx_train, idx_val = next(iter(sss_tv.split(keys_array, strat_var_array)))
+        except ValueError:
+            print('Too little class support for stratication, using random splits.')
+            random.seed(random_state)
+            idx_val = random.sample(keys_array, np.ceil(splits[1] * len(keys_array)))
+            idx_train = list(set(keys_array) - set(idx_val))
         keys_train = keys_array[idx_train].tolist()
         keys_val = keys_array[idx_val].tolist()
 
