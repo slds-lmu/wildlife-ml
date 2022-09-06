@@ -110,7 +110,7 @@ class Evaluator:
         )
 
         # Lastly, add keras metrics
-
+        breakpoint()
         trainer.compile_model()
         keras_metrics = {
             zip(
