@@ -182,9 +182,9 @@ class ActiveLearner:
             self.al_batch_size = state['al_batch_size']
             self.dir_act = state['active_directory']
             self.random_state = state['random_state']
-            self.unlabeled_dataset = state['unlabeled_dataset']
+            # self.unlabeled_dataset = state['unlabeled_dataset']
             self.active_labels = state['active_labels']
-            self.labeled_dataset = state['labeled_dataset']
+            # self.labeled_dataset = state['labeled_dataset']
             self.active_counter = state['active_counter']
             self.active_counter += 1
 
@@ -208,9 +208,9 @@ class ActiveLearner:
             'active_directory': self.dir_act,
             'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
-            'unlabeled_dataset': self.unlabeled_dataset,
+            # 'unlabeled_data': self.unlabeled_dataset.keys,
             'active_labels': self.active_labels,
-            'labeled_dataset': self.labeled_dataset,
+            # 'labeled_data': self.labeled_dataset.keys,
             'active_counter': self.active_counter,
         }
         save_as_json(state, self.state_cache_file)
