@@ -54,7 +54,7 @@ def do_stratified_splitting(
     keys_array = np.array(img_keys)
     if meta_dict is not None:
         strat_dict = get_strat_dict(meta_dict)
-        strat_var_array = np.array([strat_dict[k] for k in img_keys])
+        strat_var_array = np.array([strat_dict.get(k) for k in img_keys])
     else:
         strat_dict = {}
         strat_var_array = np.ones(len(keys_array))
@@ -77,7 +77,7 @@ def do_stratified_splitting(
         keys_array = np.array(keys_train)
         if len(strat_dict) > 0:
             strat_dict_train = {k: v for k, v in strat_dict.items() if k in keys_train}
-            strat_var_array = np.array([strat_dict_train[k] for k in keys_train])
+            strat_var_array = np.array([strat_dict_train.get(k) for k in keys_train])
         else:
             strat_var_array = np.ones(len(keys_array))
         sss_tv = StratifiedShuffleSplit(
@@ -103,7 +103,7 @@ def do_stratified_cv(
     keys_array = np.array(img_keys)
     if meta_dict is not None:
         strat_dict = get_strat_dict(meta_dict)
-        strat_var_array = np.array([strat_dict[k] for k in img_keys])
+        strat_var_array = np.array([strat_dict.get(k) for k in img_keys])
     else:
         strat_var_array = np.ones(len(keys_array))
 
