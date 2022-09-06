@@ -112,12 +112,12 @@ class Evaluator:
         # Lastly, add keras metrics
         breakpoint()
         trainer.compile_model()
-        keras_metrics = {
+        keras_metrics = dict(
             zip(
-                trainer.get_model().eval_metrics,
+                trainer.get_model().metrics_names,
                 trainer.get_model().evaluate(self.dataset),
             )
-        }
+        )
         metrics.update({'keras_metrics': keras_metrics})
 
         if verbose:
