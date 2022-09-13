@@ -202,6 +202,10 @@ class WildlifeTrainer(BaseTrainer):
         """Save a model checkpoint."""
         self.model.save(file_path)
 
+    def save_model_weights(self, file_path: str) -> None:
+        """Save model weights."""
+        self.model.save_weights(file_path)
+
     def load_model(self, file_path: str) -> None:
         """Load a model from a checkpoint."""
         self.model = keras.models.load_model(file_path)
@@ -405,6 +409,11 @@ class WildlifeTuningTrainer(BaseTrainer):
         """Save a model checkpoint."""
         if self.model is not None:
             self.model.save(file_path)
+
+    def save_model_weights(self, file_path: str) -> None:
+        """Save model weights."""
+        if self.model is not None:
+            self.model.save_weights(file_path)
 
     def load_model(self, file_path: str) -> None:
         """Load a model from a checkpoint."""
