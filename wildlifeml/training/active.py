@@ -370,6 +370,7 @@ class ActiveLearner:
         detector_file_path: str,
     ) -> Dict:
         """Obtain img-level predictions."""
+        breakpoint()
         preds_bboxes = self.trainer.predict(dataset)
         detector_dict = load_json(detector_file_path)
 
