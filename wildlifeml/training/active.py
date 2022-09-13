@@ -230,6 +230,8 @@ class ActiveLearner:
             width, height = img.size
             x_coords, y_coords = [], []
             for bkey in bbox_keys:
+                if self.pool_dataset.detector_dict[bkey].get('bbox') is None:
+                    breakpoint()
                 x, y = Cropper.get_absolute_coords(
                     self.pool_dataset.detector_dict[bkey].get('bbox'), (height, width)
                 )
