@@ -17,7 +17,6 @@ from wildlifeml.training.evaluator import Evaluator
 from wildlifeml.training.trainer import BaseTrainer
 from wildlifeml.utils.datasets import (
     do_stratified_splitting,
-    map_bbox_to_img,
     map_preds_to_img,
     render_bbox,
 )
@@ -220,10 +219,9 @@ class ActiveLearner:
         `images` and the `active_labels.csv` contains a template for adding labels.
         """
         target_path = os.path.join(self.dir_act, 'images')
-        keys_img = list(set([map_bbox_to_img(k) for k in keys]))
 
         # Save images with bboxes highlighted for user to label
-        for key in keys_img:
+        for key in keys:
             bbox_keys = self.pool_dataset.mapping_dict[key]
             first_entry = self.pool_dataset.detector_dict[bbox_keys[0]]
             img = load_image(first_entry['file'])
@@ -239,7 +237,7 @@ class ActiveLearner:
             img.save(os.path.join(target_path, key))
 
         # Save list for user to fill in labels
-        label_template = [(key, '') for key in keys_img]
+        label_template = [(key, '') for key in keys]
         save_as_csv(
             rows=label_template, target=os.path.join(self.dir_act, 'active_labels.csv')
         )
