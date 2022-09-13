@@ -140,6 +140,20 @@ def subset_dataset(dataset: WildlifeDataset, keys: List[str]) -> WildlifeDataset
     return new_dataset
 
 
+def merge_datasets(
+    dataset_1: WildlifeDataset, dataset_2: WildlifeDataset
+) -> WildlifeDataset:
+    """Merge two WildlifeDataset objects. Handle with care."""
+    # Brute-force re-using new_dataset_1's attributes
+    new_dataset = deepcopy(dataset_1)
+    new_dataset.set_keys(dataset_1.keys + dataset_2.keys)
+    new_dataset.label_dict.update(dataset_2.label_dict)
+    new_dataset.detector_dict.update(dataset_2.detector_dict)
+    new_dataset.mapping_dict.update(dataset_2.mapping_dict)
+
+    return new_dataset
+
+
 # --------------------------------------------------------------------------------------
 
 

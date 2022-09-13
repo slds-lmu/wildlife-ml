@@ -18,7 +18,11 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 
-from wildlifeml.data import map_bbox_to_img, subset_dataset
+from wildlifeml.data import (
+    map_bbox_to_img,
+    merge_datasets,
+    subset_dataset,
+)
 from wildlifeml.training.algorithms import AlgorithmFactory
 from wildlifeml.training.models import ModelFactory
 from wildlifeml.utils.datasets import do_stratified_cv
@@ -117,7 +121,9 @@ class WildlifeTrainer(BaseTrainer):
         """Return number of classes."""
         return self.num_classes
 
-    def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
+    def fit(
+        self, train_dataset: Sequence, val_dataset: Optional[Sequence] = None
+    ) -> Model:
         """Fit the model on the provided dataset."""
         if self.transfer_epochs > 0:
             print('---> Compiling model')
@@ -332,9 +338,9 @@ class WildlifeTuningTrainer(BaseTrainer):
                 num_workers=self.num_workers,
                 eval_metrics=self.eval_metrics,
             )
-            train_dataset.batch_size = self.optimal_config['batch_size']
-            val_dataset.batch_size = self.optimal_config['batch_size']
-            self.model = optimal_trainer.fit(train_dataset, val_dataset)
+            merged_dataset = merge_datasets(train_dataset, val_dataset)
+            merged_dataset.batch_size = self.optimal_config['batch_size']
+            self.model = optimal_trainer.fit(train_dataset=merged_dataset)
             return self.model
 
     def _fit_trial(
