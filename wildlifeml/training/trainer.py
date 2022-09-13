@@ -15,6 +15,7 @@ from ray.tune.integration.keras import TuneReportCallback
 from tensorflow import keras
 from tensorflow.keras import Model
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 
@@ -98,11 +99,14 @@ class WildlifeTrainer(BaseTrainer):
         finetune_callbacks: Optional[List] = None,
         num_workers: int = 0,
         eval_metrics: Optional[List] = None,
+        pretraining_checkpoint: Optional[str] = None,
     ) -> None:
         """Initialize trainer object."""
         self.num_classes = num_classes
         self.model_backbone = model_backbone
-        self.model = ModelFactory.get(model_id=model_backbone, num_classes=num_classes)
+        self.pretraining_checkpoint = pretraining_checkpoint
+        self.model = Sequential()
+        self.reset_model()
 
         self.transfer_optimizer = transfer_optimizer
         self.finetune_optimizer = finetune_optimizer
@@ -191,6 +195,8 @@ class WildlifeTrainer(BaseTrainer):
         self.model = ModelFactory.get(
             model_id=self.model_backbone, num_classes=self.num_classes
         )
+        if self.pretraining_checkpoint is not None:
+            self.model.load_weights(self.pretraining_checkpoint)
 
     def save_model(self, file_path: str) -> None:
         """Save a model checkpoint."""
@@ -222,6 +228,7 @@ class WildlifeTuningTrainer(BaseTrainer):
         transfer_callbacks: Optional[List] = None,
         finetune_callbacks: Optional[List] = None,
         eval_metrics: Optional[List[str]] = None,
+        pretraining_checkpoint: Optional[str] = None,
         local_dir: str = './ray_results/',
         random_state: int = 123,
         resources_per_trial: Optional[Dict] = None,
@@ -251,6 +258,7 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.finetune_layers = finetune_layers
         self.transfer_callbacks = transfer_callbacks
         self.finetune_callbacks = finetune_callbacks
+        self.pretraining_checkpoint = pretraining_checkpoint
 
         self.loss_func = loss_func
 
@@ -337,6 +345,7 @@ class WildlifeTuningTrainer(BaseTrainer):
                 finetune_callbacks=self.finetune_callbacks,
                 num_workers=self.num_workers,
                 eval_metrics=self.eval_metrics,
+                pretraining_checkpoint=self.pretraining_checkpoint,
             )
             merged_dataset = merge_datasets(train_dataset, val_dataset)
             merged_dataset.batch_size = self.optimal_config['batch_size']
@@ -362,6 +371,7 @@ class WildlifeTuningTrainer(BaseTrainer):
             finetune_callbacks=[TuneReportCallback(metrics=self.report_metrics)],
             num_workers=self.num_workers,
             eval_metrics=self.eval_metrics,
+            pretraining_checkpoint=self.pretraining_checkpoint,
         )
         train_dataset.batch_size = config['batch_size']
         val_dataset.batch_size = config['batch_size']
