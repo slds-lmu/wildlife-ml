@@ -280,11 +280,6 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.resources_per_trial = resources_per_trial or {'cpu': 1}
         self.num_workers = num_workers
 
-        # self.search_algorithm = AlgorithmFactory.get(search_alg_id)(
-        #     metric=self.objective,
-        #     mode=self.mode,
-        #     random_state_seed=self.random_state,
-        # )
         self.search_algorithm = AlgorithmFactory.get(search_alg_id)()
         self.scheduler_algorithm = AlgorithmFactory.get(scheduler_alg_id)()
 
