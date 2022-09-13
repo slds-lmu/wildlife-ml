@@ -17,6 +17,7 @@ from wildlifeml.training.evaluator import Evaluator
 from wildlifeml.training.trainer import BaseTrainer
 from wildlifeml.utils.datasets import (
     do_stratified_splitting,
+    map_bbox_to_img,
     map_preds_to_img,
     render_bbox,
 )
@@ -167,6 +168,7 @@ class ActiveLearner:
             staging_keys = random.sample(all_keys, self.al_batch_size)
         else:
             staging_keys = self.start_keys
+        staging_keys = list(set([map_bbox_to_img(k) for k in staging_keys]))
 
         # Move initial data and exit.
         self.fill_active_stage(staging_keys)
