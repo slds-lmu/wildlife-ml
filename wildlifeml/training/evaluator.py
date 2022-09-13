@@ -8,14 +8,18 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from tensorflow.keras import Model
 
 from wildlifeml.data import (
     BBoxMapper,
     WildlifeDataset,
-    modify_dataset,
+    subset_dataset,
 )
-from wildlifeml.utils.datasets import map_bbox_to_img, map_preds_to_img
+from wildlifeml.training.trainer import BaseTrainer
+from wildlifeml.utils.datasets import (
+    map_bbox_to_img,
+    map_preds_to_img,
+    separate_empties,
+)
 from wildlifeml.utils.io import load_csv, load_json
 
 
@@ -29,6 +33,7 @@ class Evaluator:
         dataset: WildlifeDataset,
         num_classes: int,
         empty_class_id: Optional[int] = None,
+        conf_threshold: Optional[float] = None,
         batch_size: int = 64,
     ) -> None:
         """Initialize evaluator object."""
@@ -36,6 +41,7 @@ class Evaluator:
         self.label_dict = {key: float(val) for key, val in load_csv(label_file_path)}
         self.batch_size = batch_size
         self.num_classes = num_classes
+        self.conf_threshold = conf_threshold
 
         # Index what images are contained in the eval dataset
         self.dataset_imgs = set([map_bbox_to_img(k) for k in dataset.keys])
@@ -46,16 +52,15 @@ class Evaluator:
         for k in removable_keys:
             del self.bbox_map[k]
 
-        # Get keys that have no detected bbox from the MD
-        self.empty_keys = [
-            k for k in dataset.keys if self.detector_dict[k]['category'] == -1
-        ]
+        # Get keys that have no detected bbox from the MD, with optional new threshold
+        empty_keys_md, _ = separate_empties(detector_file_path, self.conf_threshold)
+        self.empty_keys = list(set(dataset.keys).intersection(set(empty_keys_md)))
 
         # Remove keys from dataset where MD detects no bbox
         self.bbox_keys = list(set(dataset.keys) - set(self.empty_keys))
 
         # Only register samples that are not filtered by MD
-        self.dataset = modify_dataset(dataset, keys=self.bbox_keys)
+        self.dataset = subset_dataset(dataset, keys=self.bbox_keys)
         self.dataset.shuffle = False
 
         # Dirty fix for determining which Keras class predictions
@@ -72,18 +77,14 @@ class Evaluator:
         # voting via confidence and softmax scores in the evaluate phase. Consider
         # images that are filtered out by the MD with confidence 1.0.
         self.empty_pred_arr = np.zeros(
-            len(self.empty_keys), num_classes, dtype=np.float
+            shape=(len(self.empty_keys), num_classes), dtype=np.float
         )
         self.empty_pred_arr[:, self.empty_class_id] = 1.0
 
-    def evaluate(
-        self,
-        model: Model,
-        verbose: bool = True,
-    ) -> Dict:
+    def evaluate(self, trainer: BaseTrainer, verbose: bool = True) -> Dict:
         """Obtain metrics for a supplied model."""
         # Get predictions for bboxs
-        preds = model.predict(self.dataset)
+        preds = trainer.predict(self.dataset)
 
         # Above predictions are on bbox level, but image level prediction is desired.
         # For this every prediction is reweighted with the MD confidence score.
@@ -91,22 +92,31 @@ class Evaluator:
         # final prediction.
 
         # Aggregate empty and bbox predictions
-        all_keys_idx = {k: i for i, k in enumerate(self.empty_keys + self.bbox_keys)}
         all_preds = np.concatenate([self.empty_pred_arr, preds])
 
         # Compute majority voting predictions on image level
-        _, y_preds = map_preds_to_img(
-            preds_bboxes=all_preds,
+        preds_imgs = map_preds_to_img(
+            bbox_keys=self.empty_keys + self.bbox_keys,
+            preds=all_preds,
             mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
         )
-        y_trues = [self.label_dict[k] for k in all_keys_idx]
+        y_preds = [np.argmax(v) for v in preds_imgs.values()]
+        y_trues = [self.label_dict[k] for k in preds_imgs.keys()]
 
         # Compute metrics on final predictions
-        metrics = Evaluator.compute_metrics(np.asarray(y_trues), np.asarray(y_preds))
+        metrics = Evaluator.compute_metrics(
+            self, y_true=np.asarray(y_trues), y_pred=np.asarray(y_preds)
+        )
 
         # Lastly, add keras metrics
-        keras_metrics = {zip(model.metrics_names, model.evaluate(self.dataset))}
+        trainer.compile_model()
+        keras_metrics = dict(
+            zip(
+                trainer.get_model().metrics_names,
+                trainer.get_model().evaluate(self.dataset),
+            )
+        )
         metrics.update({'keras_metrics': keras_metrics})
 
         if verbose:
@@ -118,8 +128,7 @@ class Evaluator:
 
         return metrics
 
-    @staticmethod
-    def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
+    def compute_metrics(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
         """Compute eval metrics for predictions."""
         acc = accuracy_score(y_true=y_true, y_pred=y_pred)
         prec = precision_score(
@@ -140,5 +149,29 @@ class Evaluator:
             average='macro',
             zero_division=0,
         )
+        tp, tn, fp, fn = 0, 0, 0, 0
+        for true, pred in zip(y_true, y_pred):
+            if true == self.empty_class_id:
+                if true == pred:
+                    tn += 1
+                else:
+                    fp += 1
+            else:
+                if pred == self.empty_class_id:
+                    fn += 1
+                else:
+                    tp += 1
+        conf_empty = {
+            'tnr': tn / (tn + fp) if (tn + fp) > 0 else 0.0,
+            'tpr': tp / (tp + fn) if (tp + fn) > 0 else 0.0,
+            'fnr': fn / (tp + fn) if (tp + fn) > 0 else 0.0,
+            'fpr': fp / (tn + fp) if (tn + fp) > 0 else 0.0,
+        }
 
-        return {'acc': acc, 'prec': prec, 'rec': rec, 'f1': f1}
+        return {
+            'acc': acc,
+            'prec': prec,
+            'rec': rec,
+            'f1': f1,
+            'conf_empty': conf_empty,
+        }

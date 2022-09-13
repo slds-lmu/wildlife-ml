@@ -1,6 +1,7 @@
 """Classes and functions for Active Learning."""
 import os
 import random
+from copy import deepcopy
 from typing import (
     Dict,
     List,
@@ -9,7 +10,7 @@ from typing import (
 
 from tensorflow.keras import Model
 
-from wildlifeml.data import WildlifeDataset, modify_dataset
+from wildlifeml.data import WildlifeDataset, subset_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
 from wildlifeml.training.evaluator import Evaluator
@@ -27,6 +28,7 @@ from wildlifeml.utils.io import (
     save_as_csv,
     save_as_json,
 )
+from wildlifeml.utils.misc import flatten_list
 
 
 class ActiveLearner:
@@ -52,13 +54,9 @@ class ActiveLearner:
     ) -> None:
         """Instantiate an ActiveLearner object."""
         self.pool_dataset = pool_dataset
-        self.labeled_dataset = WildlifeDataset(
-            keys=[],
-            image_dir='',
-            detector_file_path='',
-            bbox_map={},
-            batch_size=0,
-        )
+        self.unlabeled_dataset = deepcopy(self.pool_dataset)
+        self.labeled_dataset = subset_dataset(self.pool_dataset, keys=[])
+
         self.dir_img = self.pool_dataset.img_dir
         self.dir_act = active_directory
 
@@ -127,9 +125,9 @@ class ActiveLearner:
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
         preds = self.predict_img(
-            dataset=self.pool_dataset,
-            mapping_dict=self.pool_dataset.mapping_dict,
-            detector_file_path=self.pool_dataset.detector_file_path,
+            dataset=self.unlabeled_dataset,
+            mapping_dict=self.unlabeled_dataset.mapping_dict,
+            detector_file_path=self.unlabeled_dataset.detector_file_path,
         )
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
@@ -164,12 +162,13 @@ class ActiveLearner:
                 f'For this fresh start, {self.al_batch_size} images are randomly '
                 f'chosen from your unlabeled dataset.'
             )
-            all_keys = self.pool_dataset.keys
+            all_keys = self.unlabeled_dataset.keys
             if self.random_state is not None:
                 random.seed(self.random_state)
             staging_keys = random.sample(all_keys, self.al_batch_size)
         else:
             staging_keys = self.start_keys
+        staging_keys = list(set([map_bbox_to_img(k) for k in staging_keys]))
 
         # Move initial data and exit.
         self.fill_active_stage(staging_keys)
@@ -185,7 +184,6 @@ class ActiveLearner:
             self.dir_act = state['active_directory']
             self.random_state = state['random_state']
             self.active_labels = state['active_labels']
-            self.labeled_dataset = state['labeled_dataset']
             self.active_counter = state['active_counter']
             self.active_counter += 1
 
@@ -210,7 +208,6 @@ class ActiveLearner:
             'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
             'active_labels': self.active_labels,
-            'labeled_dataset': self.labeled_dataset,
             'active_counter': self.active_counter,
         }
         save_as_json(state, self.state_cache_file)
@@ -224,10 +221,9 @@ class ActiveLearner:
         `images` and the `active_labels.csv` contains a template for adding labels.
         """
         target_path = os.path.join(self.dir_act, 'images')
-        keys_img = list(set([map_bbox_to_img(k) for k in keys]))
 
         # Save images with bboxes highlighted for user to label
-        for key in keys_img:
+        for key in keys:
             bbox_keys = self.pool_dataset.mapping_dict[key]
             first_entry = self.pool_dataset.detector_dict[bbox_keys[0]]
             img = load_image(first_entry['file'])
@@ -243,7 +239,7 @@ class ActiveLearner:
             img.save(os.path.join(target_path, key))
 
         # Save list for user to fill in labels
-        label_template = [(key, '') for key in keys_img]
+        label_template = [(key, '') for key in keys]
         save_as_csv(
             rows=label_template, target=os.path.join(self.dir_act, 'active_labels.csv')
         )
@@ -289,7 +285,9 @@ class ActiveLearner:
                 f'which have so far not been part of the training data.'
             )
 
-        # Update label dict and file
+        # Update label dict and file (NB: labels_existing might contain data outside the
+        # training procedure and is updated with all new information; the labels learned
+        # during training are stored in active_labels)
         self.active_labels.update(labels_supplied)
         labels_existing = {
             key: float(value) for key, value in load_csv(self.label_file_path)
@@ -300,16 +298,18 @@ class ActiveLearner:
             target=self.label_file_path,
         )
 
-        # Update pool and labeled datasets, omitting mixed-class imgs for training
-        self.labeled_dataset = modify_dataset(
-            dataset=self.pool_dataset,
-            new_label_dict={k: v for k, v in labels_supplied.items() if v != -2},
-            extend=True,
+        # Update datasets, omitting mixed-class imgs for training
+        img_keys_labeled = [k for k, v in self.active_labels.items() if v != -2]
+        bbox_keys_labeled = flatten_list(
+            [self.pool_dataset.mapping_dict[k] for k in img_keys_labeled]
         )
-        self.pool_dataset = modify_dataset(
-            dataset=self.pool_dataset,
-            keys=[k for k in self.pool_dataset.keys if k not in labels_supplied.keys()],
+        bbox_keys_unlabeled = list(
+            set(self.unlabeled_dataset.keys) - set(bbox_keys_labeled)
         )
+        self.labeled_dataset = subset_dataset(self.pool_dataset, bbox_keys_labeled)
+        self.labeled_dataset.label_dict = self.active_labels
+        self.labeled_dataset.is_supervised = True
+        self.unlabeled_dataset = subset_dataset(self.pool_dataset, bbox_keys_unlabeled)
 
         # Wipe staging area
         for f in os.listdir(os.path.join(self.dir_act, 'images')):
@@ -321,14 +321,19 @@ class ActiveLearner:
         # Get new train and val sets
         meta_dict = self.meta_dict if self.meta_dict is not None else self.active_labels
         keys_train, _, keys_val = do_stratified_splitting(
-            mapping_dict=self.pool_dataset.mapping_dict,
             img_keys=list(self.active_labels.keys()),
             splits=(self.train_size, 0.0, 1 - self.train_size),
             random_state=self.random_state,
             meta_dict=meta_dict,
         )
-        train_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_train)
-        val_dataset = modify_dataset(dataset=self.labeled_dataset, keys=keys_val)
+        train_dataset = subset_dataset(
+            self.labeled_dataset,
+            flatten_list([self.labeled_dataset.mapping_dict[k] for k in keys_train]),
+        )
+        val_dataset = subset_dataset(
+            self.labeled_dataset,
+            flatten_list([self.labeled_dataset.mapping_dict[k] for k in keys_val]),
+        )
 
         # Train model
         self.trainer.reset_model()
@@ -344,7 +349,7 @@ class ActiveLearner:
             print('No test dataset was specified. Evaluation is skipped.')
             return
 
-        metrics = self.evaluator.evaluate(self.trainer.get_model())
+        metrics = self.evaluator.evaluate(self.trainer)
 
         if self.test_logfile_path is not None:
             log = {}
@@ -366,14 +371,11 @@ class ActiveLearner:
     ) -> Dict:
         """Obtain img-level predictions."""
         preds_bboxes = self.trainer.predict(dataset)
-
         detector_dict = load_json(detector_file_path)
-        removable_keys = set(mapping_dict) - set(dataset.keys)
-        for k in removable_keys:
-            del mapping_dict[k]
-        preds_img, _ = map_preds_to_img(
-            preds_bboxes=preds_bboxes,
+
+        return map_preds_to_img(
+            preds=preds_bboxes,
+            bbox_keys=dataset.keys,
             mapping_dict=mapping_dict,
             detector_dict=detector_dict,
         )
-        return preds_img

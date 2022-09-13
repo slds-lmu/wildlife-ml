@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from typing import (
     Any,
     Dict,
+    Final,
     List,
     Optional,
     Tuple,
@@ -14,13 +15,26 @@ from ray.tune.integration.keras import TuneReportCallback
 from tensorflow import keras
 from tensorflow.keras import Model
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 
-from wildlifeml.data import map_bbox_to_img, modify_dataset
+from wildlifeml.data import (
+    map_bbox_to_img,
+    merge_datasets,
+    subset_dataset,
+)
 from wildlifeml.training.algorithms import AlgorithmFactory
 from wildlifeml.training.models import ModelFactory
 from wildlifeml.utils.datasets import do_stratified_cv
+from wildlifeml.utils.misc import flatten_list
+
+TUNABLE: Final[List[str]] = [
+    'batch_size',
+    'transfer_learning_rate',
+    'finetune_learning_rate',
+    'backbone',
+]
 
 
 class BaseTrainer(ABC):
@@ -34,6 +48,11 @@ class BaseTrainer(ABC):
     @abstractmethod
     def get_model(self) -> Model:
         """Return the model instance."""
+        pass
+
+    @abstractmethod
+    def compile_model(self) -> None:
+        """Compile the model for evaluation."""
         pass
 
     @abstractmethod
@@ -80,11 +99,14 @@ class WildlifeTrainer(BaseTrainer):
         finetune_callbacks: Optional[List] = None,
         num_workers: int = 0,
         eval_metrics: Optional[List] = None,
+        pretraining_checkpoint: Optional[str] = None,
     ) -> None:
         """Initialize trainer object."""
         self.num_classes = num_classes
         self.model_backbone = model_backbone
-        self.model = ModelFactory.get(model_id=model_backbone, num_classes=num_classes)
+        self.pretraining_checkpoint = pretraining_checkpoint
+        self.model = Sequential()
+        self.reset_model()
 
         self.transfer_optimizer = transfer_optimizer
         self.finetune_optimizer = finetune_optimizer
@@ -103,7 +125,9 @@ class WildlifeTrainer(BaseTrainer):
         """Return number of classes."""
         return self.num_classes
 
-    def fit(self, train_dataset: Sequence, val_dataset: Sequence) -> Model:
+    def fit(
+        self, train_dataset: Sequence, val_dataset: Optional[Sequence] = None
+    ) -> Model:
         """Fit the model on the provided dataset."""
         if self.transfer_epochs > 0:
             print('---> Compiling model')
@@ -158,15 +182,29 @@ class WildlifeTrainer(BaseTrainer):
         """Return the model instance."""
         return self.model
 
+    def compile_model(self) -> None:
+        """Compile model for evaluation."""
+        self.model.compile(
+            optimizer=self.transfer_optimizer,
+            loss=self.loss_func,
+            metrics=self.eval_metrics,
+        )
+
     def reset_model(self) -> None:
         """Set model to initial state as obtained from model factory."""
         self.model = ModelFactory.get(
             model_id=self.model_backbone, num_classes=self.num_classes
         )
+        if self.pretraining_checkpoint is not None:
+            self.model.load_weights(self.pretraining_checkpoint)
 
     def save_model(self, file_path: str) -> None:
         """Save a model checkpoint."""
         self.model.save(file_path)
+
+    def save_model_weights(self, file_path: str) -> None:
+        """Save model weights."""
+        self.model.save_weights(file_path)
 
     def load_model(self, file_path: str) -> None:
         """Load a model from a checkpoint."""
@@ -188,10 +226,13 @@ class WildlifeTuningTrainer(BaseTrainer):
         transfer_epochs: int,
         finetune_epochs: int,
         finetune_layers: int,
+        transfer_optimizer: Any,
+        finetune_optimizer: Any,
         num_workers: int = 0,
         transfer_callbacks: Optional[List] = None,
         finetune_callbacks: Optional[List] = None,
         eval_metrics: Optional[List[str]] = None,
+        pretraining_checkpoint: Optional[str] = None,
         local_dir: str = './ray_results/',
         random_state: int = 123,
         resources_per_trial: Optional[Dict] = None,
@@ -207,13 +248,21 @@ class WildlifeTuningTrainer(BaseTrainer):
         scheduler_alg_id: str = 'ashascheduler',
     ) -> None:
         """Initialize tuner object."""
+        if set(TUNABLE) != set(search_space):
+            raise IOError(
+                f'Please provide search ranges for all HP in {TUNABLE}. '
+                f'To exclude a HP from tuning, specify a single-element choice.'
+            )
         self.search_space = search_space
         self.num_classes = num_classes
         self.transfer_epochs = transfer_epochs
         self.finetune_epochs = finetune_epochs
+        self.transfer_optimizer = transfer_optimizer
+        self.finetune_optimizer = finetune_optimizer
         self.finetune_layers = finetune_layers
         self.transfer_callbacks = transfer_callbacks
         self.finetune_callbacks = finetune_callbacks
+        self.pretraining_checkpoint = pretraining_checkpoint
 
         self.loss_func = loss_func
 
@@ -225,27 +274,13 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.random_state = random_state
         self.verbose = verbose
 
-        if transfer_epochs_per_trial is not None:
-            self.transfer_epochs_per_trial = transfer_epochs_per_trial
-        else:
-            self.transfer_epochs_per_trial = transfer_epochs
-        if finetune_epochs_per_trial is not None:
-            self.finetune_epochs_per_trial = finetune_epochs_per_trial
-        else:
-            self.finetune_epochs_per_trial = finetune_epochs
+        self.transfer_epochs_per_trial = transfer_epochs_per_trial or transfer_epochs
+        self.finetune_epochs_per_trial = finetune_epochs_per_trial or finetune_epochs
         self.max_concurrent_trials = max_concurrent_trials
-
-        if resources_per_trial is None:
-            resources_per_trial = {'cpu': 8}
-        self.resources_per_trial = resources_per_trial
+        self.resources_per_trial = resources_per_trial or {'cpu': 1}
         self.num_workers = num_workers
 
-        self.search_algorithm = AlgorithmFactory.get(search_alg_id)(
-            metric=self.objective,
-            mode=self.mode,
-            random_state_seed=self.random_state,
-        )
-
+        self.search_algorithm = AlgorithmFactory.get(search_alg_id)()
         self.scheduler_algorithm = AlgorithmFactory.get(scheduler_alg_id)()
 
         self.eval_metrics = eval_metrics
@@ -257,11 +292,6 @@ class WildlifeTuningTrainer(BaseTrainer):
             }
         else:
             self.report_metrics = {}
-
-        if transfer_epochs == 0:
-            self.search_space.pop('transfer_learning_rate')
-        if finetune_epochs == 0:
-            self.search_space.pop('finetune_learning_rate')
 
         self.optimal_config: Optional[Dict] = None
         self.model: Optional[Model] = None
@@ -275,9 +305,8 @@ class WildlifeTuningTrainer(BaseTrainer):
         analysis = ray.tune.run(
             ray.tune.with_parameters(
                 self._fit_trial,
-                dataset_train=train_dataset,
-                dataset_val=val_dataset,
-                self=self,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
             ),
             config=self.search_space,
             search_alg=self.search_algorithm,
@@ -295,28 +324,38 @@ class WildlifeTuningTrainer(BaseTrainer):
         if self.optimal_config is None:
             raise ValueError('Tuning produced no optimal configuration.')
         else:
+            self.transfer_optimizer.learning_rate = self.optimal_config[
+                'transfer_learning_rate'
+            ]
+            self.finetune_optimizer.learning_rate = self.optimal_config[
+                'finetune_learning_rate'
+            ]
             optimal_trainer = WildlifeTrainer(
                 batch_size=self.optimal_config['batch_size'],
                 loss_func=self.loss_func,
                 num_classes=self.num_classes,
                 transfer_epochs=self.transfer_epochs,
                 finetune_epochs=self.finetune_epochs,
-                transfer_optimizer=Adam(self.optimal_config['transfer_learning_rate']),
-                finetune_optimizer=Adam(self.optimal_config['finetune_learning_rate']),
+                transfer_optimizer=self.transfer_optimizer,
+                finetune_optimizer=self.finetune_optimizer,
                 finetune_layers=self.finetune_layers,
-                model_backbone=self.optimal_config['model_backbone'],
+                model_backbone=self.optimal_config['backbone'],
                 transfer_callbacks=self.transfer_callbacks,
                 finetune_callbacks=self.finetune_callbacks,
                 num_workers=self.num_workers,
                 eval_metrics=self.eval_metrics,
+                pretraining_checkpoint=self.pretraining_checkpoint,
             )
-            self.model = optimal_trainer.fit(train_dataset, val_dataset)
+            merged_dataset = merge_datasets(train_dataset, val_dataset)
+            merged_dataset.batch_size = self.optimal_config['batch_size']
+            self.model = optimal_trainer.fit(train_dataset=merged_dataset)
             return self.model
 
     def _fit_trial(
         self, config: Dict, train_dataset: Sequence, val_dataset: Sequence
     ) -> None:
         """Worker function for ray trials."""
+        # Set current HP configs (if being tuned)
         trainer = WildlifeTrainer(
             batch_size=config['batch_size'],
             loss_func=self.loss_func,
@@ -326,11 +365,12 @@ class WildlifeTuningTrainer(BaseTrainer):
             transfer_optimizer=Adam(config['transfer_learning_rate']),
             finetune_optimizer=Adam(config['finetune_learning_rate']),
             finetune_layers=self.finetune_layers,
-            model_backbone=config['model_backbone'],
+            model_backbone=config['backbone'],
             transfer_callbacks=[TuneReportCallback(metrics=self.report_metrics)],
             finetune_callbacks=[TuneReportCallback(metrics=self.report_metrics)],
             num_workers=self.num_workers,
             eval_metrics=self.eval_metrics,
+            pretraining_checkpoint=self.pretraining_checkpoint,
         )
         train_dataset.batch_size = config['batch_size']
         val_dataset.batch_size = config['batch_size']
@@ -341,6 +381,16 @@ class WildlifeTuningTrainer(BaseTrainer):
         if self.model is None:
             raise ValueError('There is no model yet. Please fit the trainer.')
         return self.model
+
+    def compile_model(self) -> None:
+        """Compile model for evaluation."""
+        if self.model is None:
+            raise ValueError('There is no model yet. Please fit the trainer.')
+        self.model.compile(
+            optimizer=self.transfer_optimizer,
+            loss=self.loss_func,
+            metrics=self.eval_metrics,
+        )
 
     def reset_model(self) -> None:
         """Set model to initial state as obtained from model factory."""
@@ -354,6 +404,11 @@ class WildlifeTuningTrainer(BaseTrainer):
         """Save a model checkpoint."""
         if self.model is not None:
             self.model.save(file_path)
+
+    def save_model_weights(self, file_path: str) -> None:
+        """Save model weights."""
+        if self.model is not None:
+            self.model.save_weights(file_path)
 
     def load_model(self, file_path: str) -> None:
         """Load a model from a checkpoint."""
@@ -386,17 +441,24 @@ class WildlifeTuningTrainer(BaseTrainer):
         for index_run in range(n_runs):
 
             keys_train, keys_val = do_stratified_cv(
-                mapping_dict=dataset.mapping_dict,
                 img_keys=img_keys,
                 folds=folds,
                 meta_dict={k: {'label': v} for k, v in dataset.label_dict.items()},
             )
 
             for index_fold in range(folds):
-                dataset_train = modify_dataset(
-                    dataset=dataset, keys=keys_train[index_fold]
+                dataset_train = subset_dataset(
+                    dataset,
+                    flatten_list(
+                        [dataset.mapping_dict[k] for k in keys_train[index_fold]]
+                    ),
                 )
-                dataset_val = modify_dataset(dataset=dataset, keys=keys_val[index_fold])
+                dataset_val = subset_dataset(
+                    dataset,
+                    flatten_list(
+                        [dataset.mapping_dict[k] for k in keys_val[index_fold]]
+                    ),
+                )
 
                 transfer_earlystop = EarlyStopping(
                     monitor=self.objective, patience=patience, mode=self.mode
