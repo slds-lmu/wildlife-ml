@@ -285,7 +285,9 @@ class ActiveLearner:
                 f'which have so far not been part of the training data.'
             )
 
-        # Update label dict and file
+        # Update label dict and file (NB: labels_existing might contain data outside the
+        # training procedure and is updated with all new information; the labels learned
+        # during training are stored in active_labels)
         self.active_labels.update(labels_supplied)
         labels_existing = {
             key: float(value) for key, value in load_csv(self.label_file_path)
@@ -297,7 +299,7 @@ class ActiveLearner:
         )
 
         # Update datasets, omitting mixed-class imgs for training
-        img_keys_labeled = [k for k, v in labels_existing.items() if v != -2]
+        img_keys_labeled = [k for k, v in self.active_labels.items() if v != -2]
         bbox_keys_labeled = flatten_list(
             [self.pool_dataset.mapping_dict[k] for k in img_keys_labeled]
         )
@@ -305,11 +307,9 @@ class ActiveLearner:
             set(self.unlabeled_dataset.keys) - set(bbox_keys_labeled)
         )
         self.labeled_dataset = subset_dataset(self.pool_dataset, bbox_keys_labeled)
-        self.labeled_dataset.label_dict = labels_existing
+        self.labeled_dataset.label_dict = self.active_labels
         self.labeled_dataset.is_supervised = True
-        self.unlabeled_dataset = subset_dataset(
-            self.unlabeled_dataset, bbox_keys_unlabeled
-        )
+        self.unlabeled_dataset = subset_dataset(self.pool_dataset, bbox_keys_unlabeled)
 
         # Wipe staging area
         for f in os.listdir(os.path.join(self.dir_act, 'images')):
@@ -370,7 +370,6 @@ class ActiveLearner:
         detector_file_path: str,
     ) -> Dict:
         """Obtain img-level predictions."""
-        breakpoint()
         preds_bboxes = self.trainer.predict(dataset)
         detector_dict = load_json(detector_file_path)
 
