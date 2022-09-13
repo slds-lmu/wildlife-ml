@@ -125,9 +125,9 @@ class ActiveLearner:
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
         preds = self.predict_img(
-            dataset=self.pool_dataset,
-            mapping_dict=self.pool_dataset.mapping_dict,
-            detector_file_path=self.pool_dataset.detector_file_path,
+            dataset=self.unlabeled_dataset,
+            mapping_dict=self.unlabeled_dataset.mapping_dict,
+            detector_file_path=self.unlabeled_dataset.detector_file_path,
         )
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
@@ -230,8 +230,6 @@ class ActiveLearner:
             width, height = img.size
             x_coords, y_coords = [], []
             for bkey in bbox_keys:
-                if self.pool_dataset.detector_dict[bkey].get('bbox') is None:
-                    breakpoint()
                 x, y = Cropper.get_absolute_coords(
                     self.pool_dataset.detector_dict[bkey].get('bbox'), (height, width)
                 )

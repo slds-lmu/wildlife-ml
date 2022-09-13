@@ -208,7 +208,8 @@ def map_preds_to_img(
         for bbox in bbox_list:
             if bbox in preds_bboxes_dict.keys():
                 pred += preds_bboxes_dict[bbox]
-        preds_imgs.update({img: pred})
-        hard_labels.append(np.argmax(pred))
+        if sum(pred) > 0:  # only include imgs for which predictions have been made
+            preds_imgs.update({img: pred})
+            hard_labels.append(np.argmax(pred))
 
     return preds_imgs
