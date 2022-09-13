@@ -2,15 +2,12 @@
 
 from typing import Callable, Final
 
-from ray.tune.schedulers import ASHAScheduler, FIFOScheduler
-from ray.tune.search.basic_variant import BasicVariantGenerator
+from ray.tune.schedulers import ASHAScheduler
 from ray.tune.suggest.hyperopt import HyperOptSearch
 
 AVAILABLE_ALGORITHMS: Final = {
-    'randomsearch': BasicVariantGenerator,
     'hyperoptsearch': HyperOptSearch,
     'ashascheduler': ASHAScheduler,
-    'fifoscheduler': FIFOScheduler,
 }
 
 
