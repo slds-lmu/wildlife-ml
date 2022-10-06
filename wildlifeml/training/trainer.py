@@ -135,6 +135,7 @@ class WildlifeTrainer(BaseTrainer):
                 optimizer=self.transfer_optimizer,
                 loss=self.loss_func,
                 metrics=self.eval_metrics,
+                run_eagerly=True,
             )
 
             print('---> Starting transfer learning')
@@ -163,6 +164,7 @@ class WildlifeTrainer(BaseTrainer):
                 optimizer=self.finetune_optimizer,
                 loss=self.loss_func,
                 metrics=self.eval_metrics,
+                run_eagerly=True,
             )
 
             print('---> Starting fine tuning')
@@ -188,6 +190,7 @@ class WildlifeTrainer(BaseTrainer):
             optimizer=self.transfer_optimizer,
             loss=self.loss_func,
             metrics=self.eval_metrics,
+            run_eagerly=True,
         )
 
     def reset_model(self) -> None:
@@ -285,13 +288,19 @@ class WildlifeTuningTrainer(BaseTrainer):
 
         self.eval_metrics = eval_metrics
 
-        if self.eval_metrics is not None:
-            self.report_metrics = {
-                **{metric: metric for metric in self.eval_metrics},
-                **{'val_' + metric: 'val_' + metric for metric in self.eval_metrics},
-            }
+        eval_metrics_names = []
+        for metric in eval_metrics:
+            name = metric if isinstance(metric, str) else metric.name
+            eval_metrics_names.append('val_' + name)
+            eval_metrics_names.append(name)
+
+        if objective not in eval_metrics_names:
+            raise IOError(
+                f'The objective must be among the evaluation metrics. '
+                f'Please add the crorresponding objective function to eval_metrics.'
+            )
         else:
-            self.report_metrics = {}
+            self.report_metrics = {objective:objective}
 
         self.optimal_config: Optional[Dict] = None
         self.model: Optional[Model] = None
@@ -366,8 +375,8 @@ class WildlifeTuningTrainer(BaseTrainer):
             finetune_optimizer=Adam(config['finetune_learning_rate']),
             finetune_layers=self.finetune_layers,
             model_backbone=config['backbone'],
-            transfer_callbacks=[TuneReportCallback(metrics=self.report_metrics)],
-            finetune_callbacks=[TuneReportCallback(metrics=self.report_metrics)],
+            transfer_callbacks=[TuneReportCallback(metrics=self.report_metrics, on="epoch_end")],
+            finetune_callbacks=[TuneReportCallback(metrics=self.report_metrics, on="epoch_end")],
             num_workers=self.num_workers,
             eval_metrics=self.eval_metrics,
             pretraining_checkpoint=self.pretraining_checkpoint,
@@ -390,6 +399,7 @@ class WildlifeTuningTrainer(BaseTrainer):
             optimizer=self.transfer_optimizer,
             loss=self.loss_func,
             metrics=self.eval_metrics,
+            run_eagerly=True,
         )
 
     def reset_model(self) -> None:
