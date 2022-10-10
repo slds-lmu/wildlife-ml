@@ -1,7 +1,7 @@
 """Custom metrics suitable for Sparse Categorical computations."""
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import tensorflow as tf
@@ -11,7 +11,7 @@ from tensorflow import keras
 class BaseMetric(ABC):
     """Base class for deriving metrics."""
 
-    def __init__(self, reduction: str = 'macro') -> None:
+    def __init__(self, reduction: Optional[str] = 'macro') -> None:
         """Initialize a BaseMetric object."""
         self.reduction = reduction
 
@@ -109,7 +109,7 @@ class SparseCategoricalRecall(keras.metrics.Metric):
     def __init__(
         self,
         name: str = 'sparse_categorical_recall',
-        reduction: str = 'macro',
+        reduction: Optional[str] = 'macro',
         **kwargs
     ) -> None:
         """Instantiate a SparseCategoricalRecall object."""
@@ -132,7 +132,7 @@ class SparseCategoricalPrecision(keras.metrics.Metric):
     def __init__(
         self,
         name: str = 'sparse_categorical_precision',
-        reduction: str = 'macro',
+        reduction: Optional[str] = 'macro',
         **kwargs
     ) -> None:
         """Instantiate a SparseCategoricalRecall object."""
@@ -153,7 +153,10 @@ class SparseCategoricalF1(keras.metrics.Metric):
     """Keras metric for computing sparse f1 score."""
 
     def __init__(
-        self, name: str = 'sparse_categorical_f1', reduction: str = 'macro', **kwargs
+        self,
+        name: str = 'sparse_categorical_f1',
+        reduction: Optional[str] = 'macro',
+        **kwargs
     ) -> None:
         """Instantiate a SparseCategoricalF1 object."""
         super().__init__(name=name, **kwargs)
