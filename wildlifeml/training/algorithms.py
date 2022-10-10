@@ -3,13 +3,13 @@
 from typing import Callable, Final
 
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.search.hyperopt import HyperOptSearch
 from ray.tune.search.basic_variant import BasicVariantGenerator
+from ray.tune.search.hyperopt import HyperOptSearch
 
 AVAILABLE_ALGORITHMS: Final = {
     'hyperoptsearch': HyperOptSearch,
     'ashascheduler': ASHAScheduler,
-    'randomsearch': BasicVariantGenerator, # random search
+    'randomsearch': BasicVariantGenerator,  # random search
 }
 
 
