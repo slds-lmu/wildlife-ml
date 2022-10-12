@@ -204,7 +204,7 @@ def map_preds_to_img(
     hard_labels = []
 
     for img, bbox_list in mapping_dict.items():
-        pred = np.zeros(num_classes, dtype=np.float)
+        pred = np.zeros(num_classes, dtype=float)
         for bbox in bbox_list:
             if bbox in preds_bboxes_dict.keys():
                 pred += preds_bboxes_dict[bbox]
