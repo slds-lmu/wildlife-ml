@@ -14,8 +14,9 @@ class BaseMetric(ABC):
     def __init__(self, reduction: Optional[str] = 'macro') -> None:
         """Initialize a BaseMetric object."""
         self.reduction = reduction
-        
+
     @property
+    @abstractmethod
     def name(self) -> str:
         """Get name of the metric."""
         pass
