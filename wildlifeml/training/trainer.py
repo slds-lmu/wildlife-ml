@@ -256,7 +256,7 @@ class WildlifeTuningTrainer(BaseTrainer):
             )
         if transfer_epochs == 0:
             search_space['transfer_learning_rate'] = ray.tune.choice([1e-3])
-        if finetune_epochs==0:
+        if finetune_epochs == 0:
             search_space['finetune_learning_rate'] = ray.tune.choice([1e-3])
         self.search_space = search_space
         self.num_classes = num_classes
