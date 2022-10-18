@@ -254,7 +254,7 @@ class WildlifeTuningTrainer(BaseTrainer):
                 f'Please provide search ranges for all HP in {TUNABLE}. '
                 f'To exclude a HP from tuning, specify a single-element choice.'
             )
-        if transfer_epochs==0:
+        if transfer_epochs == 0:
             search_space['transfer_learning_rate'] = ray.tune.choice([1e-3])
         if finetune_epochs==0:
             search_space['finetune_learning_rate'] = ray.tune.choice([1e-3])
