@@ -243,8 +243,6 @@ class WildlifeTuningTrainer(BaseTrainer):
         objective: str = 'val_accuracy',
         mode: str = 'max',
         n_trials: int = 2,
-        transfer_epochs_per_trial: Optional[int] = 1,
-        finetune_epochs_per_trial: Optional[int] = 1,
         time_budget: int = 3600,
         verbose: int = 0,
         search_alg_id: str = 'hyperoptsearch',
@@ -256,6 +254,10 @@ class WildlifeTuningTrainer(BaseTrainer):
                 f'Please provide search ranges for all HP in {TUNABLE}. '
                 f'To exclude a HP from tuning, specify a single-element choice.'
             )
+        if transfer_epochs == 0:
+            search_space['transfer_learning_rate'] = ray.tune.choice([1e-3])
+        if finetune_epochs == 0:
+            search_space['finetune_learning_rate'] = ray.tune.choice([1e-3])
         self.search_space = search_space
         self.num_classes = num_classes
         self.transfer_epochs = transfer_epochs
@@ -277,10 +279,8 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.random_state = random_state
         self.verbose = verbose
 
-        self.transfer_epochs_per_trial = transfer_epochs_per_trial or transfer_epochs
-        self.finetune_epochs_per_trial = finetune_epochs_per_trial or finetune_epochs
         self.max_concurrent_trials = max_concurrent_trials
-        self.resources_per_trial = resources_per_trial or {'cpu': 1}
+        self.resources_per_trial = resources_per_trial
         self.num_workers = num_workers
 
         self.search_algorithm = AlgorithmFactory.get(search_alg_id)()
@@ -331,6 +331,7 @@ class WildlifeTuningTrainer(BaseTrainer):
             max_concurrent_trials=self.max_concurrent_trials,
         )
         self.optimal_config = analysis.best_config
+        self.df_trials = analysis.results_df
         if self.optimal_config is None:
             raise ValueError('Tuning produced no optimal configuration.')
         else:
@@ -370,8 +371,8 @@ class WildlifeTuningTrainer(BaseTrainer):
             batch_size=config['batch_size'],
             loss_func=self.loss_func,
             num_classes=self.num_classes,
-            transfer_epochs=self.transfer_epochs_per_trial,
-            finetune_epochs=self.finetune_epochs_per_trial,
+            transfer_epochs=self.transfer_epochs,
+            finetune_epochs=self.finetune_epochs,
             transfer_optimizer=Adam(config['transfer_learning_rate']),
             finetune_optimizer=Adam(config['finetune_learning_rate']),
             finetune_layers=self.finetune_layers,
@@ -439,9 +440,10 @@ class WildlifeTuningTrainer(BaseTrainer):
         self,
         dataset: Sequence,
         folds: int = 5,
-        n_runs: int = 2,
-        patience: int = 1,
-        max_epochs: int = 50,
+        runs: int = 10,
+        patience: int = 10,
+        max_transfer_epochs: int = 100,
+        max_finetune_epochs: int = 100,
     ) -> Tuple[int, int]:
         """Calculate the optimal number of epochs with fixed hyperparameters."""
         if self.optimal_config is None:
@@ -451,9 +453,9 @@ class WildlifeTuningTrainer(BaseTrainer):
         dataset.batch_size = batch_size
         img_keys = [map_bbox_to_img(k) for k in dataset.keys()]
 
-        transfer_stopped_epoch_list = []
-        finetune_stopped_epoch_list = []
-        for index_run in range(n_runs):
+        list_transfer_epochs = []
+        list_finetune_epochs = []
+        for _ in range(runs):
 
             keys_train, keys_val = do_stratified_cv(
                 img_keys=img_keys,
@@ -487,8 +489,8 @@ class WildlifeTuningTrainer(BaseTrainer):
                     batch_size=batch_size,
                     loss_func=self.loss_func,
                     num_classes=self.num_classes,
-                    transfer_epochs=max_epochs if self.transfer_epochs else 0,
-                    finetune_epochs=max_epochs if self.finetune_epochs else 0,
+                    transfer_epochs=max_transfer_epochs if self.transfer_epochs else 0,
+                    finetune_epochs=max_finetune_epochs if self.finetune_epochs else 0,
                     transfer_optimizer=Adam(
                         self.optimal_config['transfer_learning_rate']
                     ),
@@ -505,25 +507,22 @@ class WildlifeTuningTrainer(BaseTrainer):
 
                 trainer.fit(train_dataset=dataset_train, val_dataset=dataset_val)
 
-                transfer_stopped_epoch = transfer_earlystop.stopped_epoch
-                if transfer_stopped_epoch == 0:
-                    transfer_stopped_epoch = max_epochs
-                transfer_stopped_epoch_list.append(transfer_stopped_epoch)
+                stop_transfer_epochs = transfer_earlystop.stopped_epoch
+                if stop_transfer_epochs == 0:
+                    stop_transfer_epochs = max_transfer_epochs
+                list_transfer_epochs.append(stop_transfer_epochs)
 
-                finetune_stopped_epoch = finetune_earlystop.stopped_epoch
-                if finetune_stopped_epoch == 0:
-                    finetune_stopped_epoch = max_epochs
-                finetune_stopped_epoch_list.append(finetune_stopped_epoch)
+                stop_finetune_epochs = finetune_earlystop.stopped_epoch
+                if stop_finetune_epochs == 0:
+                    stop_finetune_epochs = max_finetune_epochs
+                list_finetune_epochs.append(stop_finetune_epochs)
 
-        optimal_transfer_epochs = int(np.mean(transfer_stopped_epoch_list))
-        optimal_finetune_epochs = int(np.mean(finetune_stopped_epoch_list))
+        optimal_transfer_epochs = int(np.mean(list_transfer_epochs))
+        optimal_finetune_epochs = int(np.mean(list_finetune_epochs))
 
         print(
             f'Found optimal epochs: {optimal_transfer_epochs} for transfer learning, '
             f'{optimal_finetune_epochs} for fine-tuning.'
         )
 
-        optimal_hps = self.optimal_config.copy()
-        optimal_hps['transfer_epochs'] = optimal_transfer_epochs
-        optimal_hps['finetune_epochs'] = optimal_finetune_epochs
         return optimal_transfer_epochs, optimal_finetune_epochs
