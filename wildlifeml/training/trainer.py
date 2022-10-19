@@ -278,6 +278,7 @@ class WildlifeTuningTrainer(BaseTrainer):
         self.local_dir = local_dir
         self.random_state = random_state
         self.verbose = verbose
+        self.df_trials = None
 
         self.max_concurrent_trials = max_concurrent_trials
         self.resources_per_trial = resources_per_trial
