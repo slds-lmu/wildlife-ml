@@ -201,7 +201,7 @@ class WildlifeTrainer(BaseTrainer):
             model_id=self.model_backbone, num_classes=self.num_classes
         )
         if self.pretraining_checkpoint is not None:
-            self.model.load_weights(self.pretraining_checkpoint)
+            self.model.load_weights(self.pretraining_checkpoint).expect_partial()
 
     def save_model(self, file_path: str) -> None:
         """Save a model checkpoint."""
