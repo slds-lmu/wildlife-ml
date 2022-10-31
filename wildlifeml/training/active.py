@@ -86,6 +86,7 @@ class ActiveLearner:
 
         # Set up evaluator
         if test_dataset is not None:
+            breakpoint()
             if test_dataset.label_file_path is None:
                 raise ValueError('Test dataset must have label file.')
             else:
