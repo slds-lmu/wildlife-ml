@@ -109,6 +109,6 @@ class AcquisitorFactory:
         elif acquisitor_name == 'entropy':
             return EntropyAcquisitor(top_k=top_k)
         elif BreakingTiesAcquisitor == 'breakingties':
-            return EntropyAcquisitor(top_k=top_k)
+            return BreakingTiesAcquisitor(top_k=top_k)
         else:
             raise ValueError(f'Acquisitor with name "{acquisitor_name}" is unknown.')
