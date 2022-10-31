@@ -70,7 +70,7 @@ def do_stratified_splitting(
     try:
         idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
     except ValueError:
-        print('Too little class support for stratication, using random splits.')
+        print('Too little class support for stratification, using random splits.')
         random.seed(random_state)
         idx_list = list(range(len(keys_array)))
         idx_test = random.sample(idx_list, int(np.ceil(splits[2] * len(keys_array))))
