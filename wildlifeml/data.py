@@ -53,7 +53,7 @@ class WildlifeDataset(Sequence):
         """Initialize a WildlifeDataset object."""
         self.keys = keys
         self.img_dir = image_dir
-
+        self.label_file_path = label_file_path
         if label_file_path is not None:
             self.is_supervised = True
             self.label_dict = {
