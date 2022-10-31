@@ -56,6 +56,7 @@ def do_stratified_splitting(
     if meta_dict is not None:
         strat_dict = get_strat_dict(meta_dict)
         strat_var_array = np.array([strat_dict.get(k) for k in img_keys])
+        breakpoint()
     else:
         strat_dict = {}
         strat_var_array = np.ones(len(keys_array))
@@ -156,7 +157,6 @@ def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
         for k in meta_dict.keys():
             concat = '_'.join([str(v) for v in meta_dict[k].values()])
             strat_dict.update({k: concat})
-            breakpoint()
         return strat_dict
 
 
