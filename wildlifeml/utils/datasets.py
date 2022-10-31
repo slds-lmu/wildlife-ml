@@ -66,7 +66,6 @@ def do_stratified_splitting(
         test_size=splits[2],
         random_state=random_state,
     )
-    breakpoint()
     print('---> Performing stratified split')
     try:
         idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
