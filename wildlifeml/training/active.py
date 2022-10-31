@@ -86,13 +86,16 @@ class ActiveLearner:
 
         # Set up evaluator
         if test_dataset is not None:
-            self.evaluator = Evaluator(
-                label_file_path=test_dataset.label_file_path,
-                detector_file_path=test_dataset.detector_file_path,
-                dataset=test_dataset,
-                empty_class_id=empty_class_id,
-                num_classes=trainer.get_num_classes(),
-            )
+            if test_dataset.label_file_path is None:
+                raise ValueError('Test dataset must have label file.')
+            else:
+                self.evaluator = Evaluator(
+                    label_file_path=test_dataset.label_file_path,
+                    detector_file_path=test_dataset.detector_file_path,
+                    dataset=test_dataset,
+                    empty_class_id=empty_class_id,
+                    num_classes=trainer.get_num_classes(),
+                )
 
     def run(self) -> None:
         """Trigger Active Learning process."""
