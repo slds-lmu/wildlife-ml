@@ -87,7 +87,7 @@ class ActiveLearner:
         # Set up evaluator
         if test_dataset is not None:
             self.evaluator = Evaluator(
-                label_file_path=label_file_path,
+                label_file_path=test_dataset.label_file_path,
                 detector_file_path=test_dataset.detector_file_path,
                 dataset=test_dataset,
                 empty_class_id=empty_class_id,
@@ -289,9 +289,12 @@ class ActiveLearner:
         # training procedure and is updated with all new information; the labels learned
         # during training are stored in active_labels)
         self.active_labels.update(labels_supplied)
-        labels_existing = {
-            key: float(value) for key, value in load_csv(self.label_file_path)
-        }
+        if os.path.exists(self.label_file_path):
+            labels_existing = {
+                key: float(value) for key, value in load_csv(self.label_file_path)
+            }
+        else:
+            labels_existing = {}
         labels_existing.update(labels_supplied)
         save_as_csv(
             rows=[(key, value) for key, value in labels_existing.items()],
