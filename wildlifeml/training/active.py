@@ -250,8 +250,8 @@ class ActiveLearner:
         print(
             f'A selection of images is now waiting in "{self.dir_act}" for your '
             f'labeling expertise! \nPlease provide class labels in integer format.'
-            f'\n Special cases: please use the label "-1" for empty images and the '
-            f'label "-2" for images with more than one animal species present.'
+            f'\n Special cases: please use the label label "-1" for images with more '
+            f'than one animal species present.'
             f'\nRerun the program when you are done.'
         )
 
