@@ -363,6 +363,7 @@ class ActiveLearner:
                 log.update(load_json(self.test_logfile_path))
 
             log.update({f'iteration {self.active_counter}': metrics})
+            breakpoint()
             save_as_json(log, self.test_logfile_path)
 
     def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
