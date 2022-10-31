@@ -66,7 +66,6 @@ def do_stratified_splitting(
         test_size=splits[2],
         random_state=random_state,
     )
-    breakpoint()
     print('---> Performing stratified split')
     try:
         idx_train, idx_test = next(iter(sss_tt.split(keys_array, strat_var_array)))
@@ -157,6 +156,7 @@ def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
         for k in meta_dict.keys():
             concat = '_'.join([str(v) for v in meta_dict[k].values()])
             strat_dict.update({k: concat})
+            breakpoint()
         return strat_dict
 
 
