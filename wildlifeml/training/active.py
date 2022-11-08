@@ -44,7 +44,7 @@ class ActiveLearner:
         active_directory: str = 'active-wildlife',
         acquisitor_name: str = 'random',
         start_fresh: bool = True,
-        start_keys: List[str] = None,
+        start_keys: Optional[List[str]] = None,
         train_size: float = 0.7,
         test_dataset: Optional[WildlifeDataset] = None,
         test_logfile_path: Optional[str] = None,
