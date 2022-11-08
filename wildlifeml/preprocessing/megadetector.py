@@ -85,10 +85,12 @@ class MegaDetector:
 
             # Load images as array
             img_list = []
+            loaded_files = []
             for path in batch_files:
                 try:
                     img_arr = np.asarray(load_image(path))
                     img_list.append(img_arr)
+                    loaded_files.append(path)
                 except (IOError, OSError) as e:
                     cnt_corrupt += 1
                     print(
@@ -107,7 +109,7 @@ class MegaDetector:
             batch_result = self.predict(imgs)
 
             # Add an entry for every bounding box found with own key
-            for detections, f_path in zip(batch_result.values(), batch_files):
+            for detections, f_path in zip(batch_result.values(), loaded_files):
                 key_stem = os.path.split(f_path)[1]
                 for i, detection in enumerate(detections, start=1):
                     detection.update({'file': f_path})
