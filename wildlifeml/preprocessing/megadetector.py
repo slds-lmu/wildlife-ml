@@ -79,11 +79,30 @@ class MegaDetector:
         print('Predicting bounding boxes ...')
         output_dict = {}
         cnt_empty = 0
+        cnt_corrupt = 0
         for i in trange(0, len(file_paths), self.batch_size):
             batch_files = file_paths[i : i + self.batch_size]
 
             # Load images as array
-            imgs = np.stack([np.asarray(load_image(path)) for path in batch_files])
+            img_list = []
+            for path in batch_files:
+                try:
+                    img_arr = np.asarray(load_image(path))
+                    img_list.append(img_arr)
+                except (IOError, OSError) as e:
+                    cnt_corrupt += 1
+                    print(
+                        'Failed to load file with path "{}". It will be skipped.\n'
+                        'Error: {}'.format(path, str(e))
+                    )
+
+            # Skip to next batch if no image could be loaded
+            if len(img_list) == 0:
+                continue
+
+            # Combine list into full array
+            imgs = np.stack(img_list)
+
             # Predict bounding boxes
             batch_result = self.predict(imgs)
 
@@ -104,7 +123,7 @@ class MegaDetector:
                     )
                     cnt_empty += 1
 
-        share_empty = cnt_empty / len(file_names) * 100
+        share_empty = cnt_empty / (len(file_names) - cnt_corrupt) * 100
         print(
             f'Processing finished. Found bounding boxes for {1-share_empty} percent of '
             f'images at threshold {self.confidence_threshold}.'
