@@ -16,7 +16,9 @@ from PIL import Image
 
 def load_image(file_path: str, mode: str = 'RGB') -> Image:
     """Load an image from a path."""
-    return Image.open(file_path).convert(mode)
+    img = Image.open(file_path)
+    img.load()
+    return img.convert(mode)
 
 
 def load_json(file_path: str) -> Dict:
