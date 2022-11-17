@@ -84,7 +84,7 @@ class Evaluator:
     def evaluate(self, trainer: BaseTrainer, verbose: bool = True) -> Dict:
         """Obtain metrics for a supplied model."""
         # Get predictions for bboxs
-        preds = trainer.predict(self.dataset)
+        self.preds = trainer.predict(self.dataset)
 
         # Above predictions are on bbox level, but image level prediction is desired.
         # For this every prediction is reweighted with the MD confidence score.
@@ -92,7 +92,7 @@ class Evaluator:
         # final prediction.
 
         # Aggregate empty and bbox predictions
-        all_preds = np.concatenate([self.empty_pred_arr, preds])
+        all_preds = np.concatenate([self.empty_pred_arr, self.preds])
 
         # Compute majority voting predictions on image level
         preds_imgs = map_preds_to_img(
@@ -174,4 +174,13 @@ class Evaluator:
             'rec': rec,
             'f1': f1,
             'conf_empty': conf_empty,
+        }
+
+    def get_details(self) -> Dict:
+        """Obtain further details about predictions."""
+
+        return {
+            'keys_bbox': self.empty_keys+self.bbox_keys,
+            'preds_bbox': np.concatenate([self.empty_pred_arr, self.preds]),
+            'preds_imgs': self.preds_imgs,
         }
