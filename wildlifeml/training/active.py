@@ -407,10 +407,10 @@ class ActiveLearner:
         """Obtain img-level predictions."""
         preds_bboxes = self.trainer.predict(dataset)
         detector_dict = load_json(detector_file_path)
-
-        return map_preds_to_img(
+        preds_imgs = map_preds_to_img(
             preds=preds_bboxes,
             bbox_keys=dataset.keys,
             mapping_dict=mapping_dict,
             detector_dict=detector_dict,
         )
+        return preds_imgs
