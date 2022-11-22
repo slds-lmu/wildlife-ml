@@ -413,5 +413,4 @@ class ActiveLearner:
             mapping_dict=mapping_dict,
             detector_dict=detector_dict,
         )
-        breakpoint()
         return preds_imgs
