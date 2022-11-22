@@ -144,9 +144,9 @@ class ActiveLearner:
                 log_acq.update(load_json(self.acq_logfile_path))
             log_acq.update(
                 {
-                    f'iteration {self.active_counter - 1}': {
+                    f'iteration {self.active_counter + 1}': {
                         'acq_predictions': {
-                            k: v for k, v in preds.items() if k in staging_keys
+                            k: list(v) for k, v in preds.items() if k in staging_keys
                         }
                     }
                 }
