@@ -146,7 +146,9 @@ class ActiveLearner:
                 {
                     f'iteration {self.active_counter + 1}': {
                         'acq_predictions': {
-                            k: list(v) for k, v in preds.items() if k in staging_keys
+                            k: list(v.round(5))
+                            for k, v in preds.items()
+                            if k in staging_keys
                         }
                     }
                 }
