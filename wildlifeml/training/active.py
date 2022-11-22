@@ -48,6 +48,7 @@ class ActiveLearner:
         train_size: float = 0.7,
         test_dataset: Optional[WildlifeDataset] = None,
         test_logfile_path: Optional[str] = None,
+        acq_logfile_path: Optional[str] = None,
         meta_dict: Optional[Dict] = None,
         state_cache: str = '.activecache.json',
         random_state: Optional[int] = None,
@@ -66,6 +67,7 @@ class ActiveLearner:
 
         self.test_dataset = test_dataset
         self.test_logfile_path = test_logfile_path
+        self.acq_logfile_path = acq_logfile_path
 
         self.acquisitor = AcquisitorFactory.get(
             acquisitor_name, top_k=al_batch_size, random_state=random_state
@@ -135,6 +137,23 @@ class ActiveLearner:
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
+
+        if self.acq_logfile_path is not None:
+            log_acq: Dict = {}
+            if os.path.exists(self.acq_logfile_path):
+                log_acq.update(load_json(self.acq_logfile_path))
+            log_acq.update(
+                {
+                    f'iteration {self.active_counter + 1}': {
+                        'acq_predictions': {
+                            k: list(v.round(5))
+                            for k, v in preds.items()
+                            if k in staging_keys
+                        }
+                    }
+                }
+            )
+            save_as_json(log_acq, self.acq_logfile_path)
 
     def initialize(self) -> None:
         """Initialize AL run as fresh start."""
@@ -287,6 +306,16 @@ class ActiveLearner:
                 f'Please note: your supplied labels contain classes "{unknown_labels}" '
                 f'which have so far not been part of the training data.'
             )
+
+        # Update acquisition log
+        if self.acq_logfile_path is not None:
+            log_acq: Dict = {}
+            if os.path.exists(self.acq_logfile_path):
+                log_acq = load_json(self.acq_logfile_path)
+            log_acq[f'iteration {self.active_counter}'].update(
+                {'acq_true_labels': {k: v for k, v in labels_supplied.items()}}
+            )
+            save_as_json(log_acq, self.acq_logfile_path)
 
         # Update label dict and file (NB: labels_existing might contain data outside the
         # training procedure and is updated with all new information; the labels learned
