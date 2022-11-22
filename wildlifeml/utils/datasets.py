@@ -199,6 +199,7 @@ def map_preds_to_img(
     confs = confs[..., np.newaxis]
     preds_bboxes = preds * confs
     preds_bboxes_dict = {j: preds_bboxes[i, ...] for i, j in enumerate(bbox_keys)}
+    breakpoint()
 
     preds_imgs = {}
     hard_labels = []
