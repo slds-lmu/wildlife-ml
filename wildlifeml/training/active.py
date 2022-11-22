@@ -310,12 +310,8 @@ class ActiveLearner:
             log_acq: Dict = {}
             if os.path.exists(self.acq_logfile_path):
                 log_acq = load_json(self.acq_logfile_path)
-            log_acq.update(
-                {
-                    f'iteration {self.active_counter}': {
-                        'acq_true_labels': {k: v for k, v in labels_supplied.items()}
-                    }
-                }
+            log_acq[f'iteration {self.active_counter}'].update(
+                {'acq_true_labels': {k: v for k, v in labels_supplied.items()}}
             )
             save_as_json(log_acq, self.acq_logfile_path)
 
