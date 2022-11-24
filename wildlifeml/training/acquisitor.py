@@ -69,6 +69,7 @@ class EntropyAcquisitor(BaseAcquisitor):
         entropy_dict = {
             key: entropy(np.array(value), base=2) for key, value in predictions.items()
         }
+        breakpoint()
         return self.get_top_k_keys(entropy_dict, self.top_k)
 
     def __str__(self):
