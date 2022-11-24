@@ -8,28 +8,16 @@ from typing import (  # Dict,; Tuple,
 )
 
 import numpy as np
-
-# import ray
-# from ray.tune.integration.keras import TuneReportCallback
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import Model
-
-# from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import Sequential
-
-# from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import Sequence
 
-# from wildlifeml.data import (
-#     map_bbox_to_img,
-#     merge_datasets,
-#     subset_dataset,
-# )
-# from wildlifeml.training.algorithms import AlgorithmFactory
 from wildlifeml.training.models import ModelFactory
 
-# from wildlifeml.utils.datasets import do_stratified_cv
-# from wildlifeml.utils.misc import flatten_list
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
 
 TUNABLE: Final[List[str]] = [
     'batch_size',
@@ -84,7 +72,7 @@ class BaseTrainer(ABC):
 
 
 class WildlifeTrainer(BaseTrainer):
-    """Trainer object for assisting with fitting neural networks."""
+    """Trainer for assisting with fitting neural networks."""
 
     def __init__(
         self,
