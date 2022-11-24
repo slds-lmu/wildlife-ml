@@ -43,10 +43,10 @@ class BaseAcquisitor(ABC):
         """Return keys of top k values."""
         k = min(top_k, len(acq_scores))
         if not reverse:
-            list_top_k = heapq.nlargest(k, acq_scores)
+            list_top_k = heapq.nlargest(k, acq_scores.items(), key=lambda i: i[1])
         else:
-            list_top_k = heapq.nsmallest(k, acq_scores)
-        return list_top_k
+            list_top_k = heapq.nsmallest(k, acq_scores.items(), key=lambda i: i[1])
+        return [x[0] for x in list_top_k]
 
 
 class RandomAcquisitor(BaseAcquisitor):
