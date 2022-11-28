@@ -74,12 +74,14 @@ class Evaluator:
 
         # Pre-allocated array of shape (num_empty_samples, num_classes), which is 1
         # in the empty class index and zero otherwise. This is a setup for majority
-        # voting via confidence and softmax scores in the evaluate phase. Consider
+        # voting via confidence and softmax scores in the evaluation phase. Consider
         # images that are filtered out by the MD with confidence 1.0.
         self.empty_pred_arr = np.zeros(
             shape=(len(self.empty_keys), num_classes), dtype=float
         )
         self.empty_pred_arr[:, self.empty_class_id] = 1.0
+        self.preds = np.empty(0)
+        self.preds_imgs: Dict = {}
 
     def evaluate(self, trainer: BaseTrainer, verbose: bool = True) -> Dict:
         """Obtain metrics for a supplied model."""
@@ -179,7 +181,7 @@ class Evaluator:
     def get_details(self) -> Dict:
         """Obtain further details about predictions."""
         return {
-            'keys_bbox': self.empty_keys+self.bbox_keys,
+            'keys_bbox': self.empty_keys + self.bbox_keys,
             'preds_bbox': np.concatenate([self.empty_pred_arr, self.preds]),
             'preds_imgs': self.preds_imgs,
         }
