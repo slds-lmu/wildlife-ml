@@ -1,5 +1,9 @@
 """Evaluating model outputs."""
-from typing import Dict, Optional
+from typing import (
+    Dict,
+    List,
+    Optional,
+)
 
 import numpy as np
 from sklearn.metrics import (
@@ -82,6 +86,7 @@ class Evaluator:
         self.empty_pred_arr[:, self.empty_class_id] = 1.0
         self.preds = np.empty(0)
         self.preds_imgs: Dict = {}
+        self.y_trues: List = []
 
     def evaluate(self, trainer: BaseTrainer, verbose: bool = True) -> Dict:
         """Obtain metrics for a supplied model."""
@@ -104,11 +109,11 @@ class Evaluator:
             detector_dict=self.detector_dict,
         )
         y_preds = [np.argmax(v) for v in self.preds_imgs.values()]
-        y_trues = [self.label_dict[k] for k in self.preds_imgs.keys()]
+        self.y_trues = [self.label_dict[k] for k in self.preds_imgs.keys()]
 
         # Compute metrics on final predictions
         metrics = Evaluator.compute_metrics(
-            self, y_true=np.asarray(y_trues), y_pred=np.asarray(y_preds)
+            self, y_true=np.asarray(self.y_trues), y_pred=np.asarray(y_preds)
         )
 
         # Lastly, add keras metrics
@@ -184,4 +189,5 @@ class Evaluator:
             'keys_bbox': self.empty_keys + self.bbox_keys,
             'preds_bbox': np.concatenate([self.empty_pred_arr, self.preds]),
             'preds_imgs': self.preds_imgs,
+            'truth_imgs': self.y_trues,
         }
