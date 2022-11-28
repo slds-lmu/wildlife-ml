@@ -1,5 +1,9 @@
 """Evaluating model outputs."""
-from typing import Dict, Optional
+from typing import (
+    Dict,
+    List,
+    Optional,
+)
 
 import numpy as np
 from sklearn.metrics import (
@@ -74,17 +78,20 @@ class Evaluator:
 
         # Pre-allocated array of shape (num_empty_samples, num_classes), which is 1
         # in the empty class index and zero otherwise. This is a setup for majority
-        # voting via confidence and softmax scores in the evaluate phase. Consider
+        # voting via confidence and softmax scores in the evaluation phase. Consider
         # images that are filtered out by the MD with confidence 1.0.
         self.empty_pred_arr = np.zeros(
             shape=(len(self.empty_keys), num_classes), dtype=float
         )
         self.empty_pred_arr[:, self.empty_class_id] = 1.0
+        self.preds = np.empty(0)
+        self.preds_imgs: Dict = {}
+        self.y_trues: List = []
 
     def evaluate(self, trainer: BaseTrainer, verbose: bool = True) -> Dict:
         """Obtain metrics for a supplied model."""
         # Get predictions for bboxs
-        preds = trainer.predict(self.dataset)
+        self.preds = trainer.predict(self.dataset)
 
         # Above predictions are on bbox level, but image level prediction is desired.
         # For this every prediction is reweighted with the MD confidence score.
@@ -92,21 +99,21 @@ class Evaluator:
         # final prediction.
 
         # Aggregate empty and bbox predictions
-        all_preds = np.concatenate([self.empty_pred_arr, preds])
+        all_preds = np.concatenate([self.empty_pred_arr, self.preds])
 
         # Compute majority voting predictions on image level
-        preds_imgs = map_preds_to_img(
+        self.preds_imgs = map_preds_to_img(
             bbox_keys=self.empty_keys + self.bbox_keys,
             preds=all_preds,
             mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
         )
-        y_preds = [np.argmax(v) for v in preds_imgs.values()]
-        y_trues = [self.label_dict[k] for k in preds_imgs.keys()]
+        y_preds = [np.argmax(v) for v in self.preds_imgs.values()]
+        self.y_trues = [self.label_dict[k] for k in self.preds_imgs.keys()]
 
         # Compute metrics on final predictions
         metrics = Evaluator.compute_metrics(
-            self, y_true=np.asarray(y_trues), y_pred=np.asarray(y_preds)
+            self, y_true=np.asarray(self.y_trues), y_pred=np.asarray(y_preds)
         )
 
         # Lastly, add keras metrics
@@ -174,4 +181,13 @@ class Evaluator:
             'rec': rec,
             'f1': f1,
             'conf_empty': conf_empty,
+        }
+
+    def get_details(self) -> Dict:
+        """Obtain further details about predictions."""
+        return {
+            'keys_bbox': self.empty_keys + self.bbox_keys,
+            'preds_bbox': np.concatenate([self.empty_pred_arr, self.preds]),
+            'preds_imgs': self.preds_imgs,
+            'truth_imgs': self.y_trues,
         }
