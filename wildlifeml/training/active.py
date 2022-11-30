@@ -395,14 +395,15 @@ class ActiveLearner:
             print('No test dataset was specified. Evaluation is skipped.')
             return
 
-        metrics = self.evaluator.evaluate(self.trainer)
+        _ = self.evaluator.evaluate(self.trainer)
+        details = self.evaluator.get_details()
 
         if self.test_logfile_path is not None:
             log = {}
             if os.path.exists(self.test_logfile_path):
                 log.update(load_json(self.test_logfile_path))
 
-            log.update({f'iteration {self.active_counter}': metrics})
+            log.update({f'iteration {self.active_counter}': details})
             save_as_json(log, self.test_logfile_path)
 
     def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
