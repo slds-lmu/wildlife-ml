@@ -25,8 +25,10 @@ from wildlifeml.utils.io import (
     load_csv,
     load_image,
     load_json,
+    load_pickle,
     save_as_csv,
     save_as_json,
+    save_as_pickle,
 )
 from wildlifeml.utils.misc import flatten_list
 
@@ -401,10 +403,10 @@ class ActiveLearner:
         if self.test_logfile_path is not None:
             log = {}
             if os.path.exists(self.test_logfile_path):
-                log.update(load_json(self.test_logfile_path))
+                log.update(load_pickle(self.test_logfile_path))
 
             log.update({f'iteration {self.active_counter}': details})
-            save_as_json(log, self.test_logfile_path)
+            save_as_pickle(log, self.test_logfile_path)
 
     def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
         """Obtain bbox-level predictions."""
