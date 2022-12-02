@@ -107,6 +107,7 @@ class Evaluator:
             preds=all_preds,
             mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
+            empty_class_id=self.empty_class_id,
         )
         y_preds = [np.argmax(v) for v in self.preds_imgs.values()]
         self.y_trues = [self.label_dict[k] for k in self.preds_imgs.keys()]

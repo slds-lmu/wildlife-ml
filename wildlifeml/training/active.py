@@ -70,6 +70,7 @@ class ActiveLearner:
         self.test_dataset = test_dataset
         self.test_logfile_path = test_logfile_path
         self.acq_logfile_path = acq_logfile_path
+        self.empty_class_id = empty_class_id
 
         self.acquisitor = AcquisitorFactory.get(
             acquisitor_name, top_k=al_batch_size, random_state=random_state
@@ -87,7 +88,6 @@ class ActiveLearner:
         self.active_labels: Dict[str, float] = {}
         # Count active learning iterations
         self.active_counter = 0
-
         # Set up evaluator
         if test_dataset is not None:
             if test_dataset.label_file_path is None:
@@ -97,7 +97,7 @@ class ActiveLearner:
                     label_file_path=test_dataset.label_file_path,
                     detector_file_path=test_dataset.detector_file_path,
                     dataset=test_dataset,
-                    empty_class_id=empty_class_id,
+                    empty_class_id=self.empty_class_id,
                     num_classes=trainer.get_num_classes(),
                 )
 
@@ -426,5 +426,6 @@ class ActiveLearner:
             bbox_keys=dataset.keys,
             mapping_dict=mapping_dict,
             detector_dict=detector_dict,
+            empty_class_id=self.empty_class_id,
         )
         return preds_imgs
