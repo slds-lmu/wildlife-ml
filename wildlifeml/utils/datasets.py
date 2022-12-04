@@ -192,15 +192,28 @@ def map_preds_to_img(
     bbox_keys: List[str],
     mapping_dict: Dict,
     detector_dict: Dict,
+    empty_class_id: Optional[int] = None,
 ) -> Dict[Any, np.ndarray]:
     """Map predictions on bbox level back to img level."""
     num_classes = preds.shape[1]
+    if empty_class_id is None:
+        empty_class_id = num_classes - 1
     preds_bboxes_dict = {j: preds[i, ...] for i, j in enumerate(bbox_keys)}
     preds_imgs = {}
 
     for img, bbox_list in mapping_dict.items():
         pred = np.zeros(num_classes, dtype=float)
         confs = []
+        nonempty_preds = [
+            bbox
+            for bbox in bbox_list
+            if (
+                bbox in preds_bboxes_dict.keys()
+                and preds_bboxes_dict[bbox].argmax() != empty_class_id
+            )
+        ]
+        if len(nonempty_preds) > 0:
+            bbox_list = nonempty_preds
         for bbox in bbox_list:
             if bbox in preds_bboxes_dict.keys():
                 conf = detector_dict[bbox].get('conf') or 0.0
@@ -208,5 +221,4 @@ def map_preds_to_img(
                 pred += preds_bboxes_dict[bbox] * conf
         if sum(pred) > 0:  # only include imgs for which predictions have been made
             preds_imgs.update({img: pred / sum(confs)})
-
     return preds_imgs
