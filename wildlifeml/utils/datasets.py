@@ -187,7 +187,6 @@ def separate_empties(
 # --------------------------------------------------------------------------------------
 
 
-
 def map_preds_to_img(
     preds: np.ndarray,
     bbox_keys: List[str],
@@ -206,9 +205,12 @@ def map_preds_to_img(
         pred = np.zeros(num_classes, dtype=float)
         confs = []
         nonempty_preds = [
-            bbox for bbox in bbox_list
-            if bbox in preds_bboxes_dict.keys()
-            if preds_bboxes_dict[bbox].argmax() != empty_class_id
+            bbox
+            for bbox in bbox_list
+            if (
+                bbox in preds_bboxes_dict.keys()
+                and preds_bboxes_dict[bbox].argmax() != empty_class_id
+            )
         ]
         if len(nonempty_preds) > 0:
             bbox_list = nonempty_preds
