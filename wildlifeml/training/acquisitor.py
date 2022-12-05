@@ -11,14 +11,24 @@ from typing import (
 import numpy as np
 from scipy.stats import entropy
 
+from wildlifeml.utils.datasets import do_stratified_sampling
+
 
 class BaseAcquisitor(ABC):
     """Base class for acquisition."""
 
-    def __init__(self, top_k: int = 10, random_state: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        top_k: int = 10,
+        random_state: Optional[int] = None,
+        stratified: bool = False,
+        meta_dict: Optional[Dict] = None,
+    ) -> None:
         """Initialize BaseAcquisitor."""
         self.top_k = top_k
         self.random_state = random_state
+        self.stratified = stratified
+        self.meta_dict = meta_dict
 
     @abstractmethod
     def _run_acquisition(self, predictions: Dict[str, float]) -> List[str]:
@@ -52,10 +62,28 @@ class BaseAcquisitor(ABC):
 class RandomAcquisitor(BaseAcquisitor):
     """Random acquisition."""
 
-    def _run_acquisition(self, predictions: Dict[str, float]) -> List[str]:
+    def _run_acquisition(
+        self,
+        predictions: Dict[str, float],
+        stratified: bool = False,
+        meta_dict: Optional[Dict] = None,
+    ) -> List[str]:
         if self.random_state is not None:
             random.seed(self.random_state)
-        return random.sample(list(predictions.keys()), self.top_k)
+        if stratified and meta_dict is None:
+            raise ValueError(
+                'Stratified acquisition requires variable for stratification.'
+            )
+        if stratified:
+            keys = do_stratified_sampling(
+                img_keys=list(predictions.keys()),
+                n_samples=self.top_k,
+                meta_dict=meta_dict,
+                random_state=self.random_state,
+            )
+        else:
+            keys = random.sample(list(predictions.keys()), self.top_k)
+        return keys
 
     def __str__(self):
         """Print object name."""
@@ -101,11 +129,20 @@ class AcquisitorFactory:
 
     @staticmethod
     def get(
-        acquisitor_name: str, top_k: int = 10, random_state: Optional[int] = None
+        acquisitor_name: str,
+        top_k: int = 10,
+        random_state: Optional[int] = None,
+        stratified: bool = False,
+        meta_dict: Optional[Dict] = None,
     ) -> BaseAcquisitor:
         """Create acquisitor."""
         if acquisitor_name == 'random':
-            return RandomAcquisitor(top_k=top_k, random_state=random_state)
+            return RandomAcquisitor(
+                top_k=top_k,
+                random_state=random_state,
+                stratified=stratified,
+                meta_dict=meta_dict,
+            )
         elif acquisitor_name == 'entropy':
             return EntropyAcquisitor(top_k=top_k)
         elif BreakingTiesAcquisitor == 'breakingties':
