@@ -52,13 +52,8 @@ def do_stratified_splitting(
     random_state: Optional[int] = None,
 ) -> Tuple[List[Any], ...]:
     """Perform stratified holdout splitting."""
-    keys_array = np.array(img_keys)
-    if meta_dict is not None:
-        strat_dict = get_strat_dict(meta_dict)
-        strat_var_array = np.array([strat_dict.get(k) for k in img_keys])
-    else:
-        strat_dict = {}
-        strat_var_array = np.ones(len(keys_array))
+    # Get stratification objects
+    strat_dict, keys_array, strat_var_array = _get_strat_objects(img_keys, meta_dict)
 
     # Split intro train and test keys
     sss_tt = StratifiedShuffleSplit(
@@ -106,6 +101,34 @@ def do_stratified_splitting(
     return keys_train, keys_val, keys_test
 
 
+def do_stratified_sampling(
+    img_keys: List[str],
+    n_samples: int,
+    meta_dict: Optional[Dict] = None,
+    random_state: Optional[int] = None,
+) -> List[str]:
+    """Sample in stratified manner."""
+    # Get stratification objects
+    strat_dict, keys_array, strat_var_array = _get_strat_objects(img_keys, meta_dict)
+    # Split intro train and test keys
+    sss = StratifiedShuffleSplit(
+        n_splits=1,
+        test_size=n_samples,
+        random_state=random_state,
+    )
+    print('---> Draw stratified sample')
+    try:
+        _, idx_test = next(iter(sss.split(keys_array, strat_var_array)))
+    except ValueError:
+        print('Too little class support for stratification, using random splits.')
+        random.seed(random_state)
+        idx_list = list(range(len(keys_array)))
+        idx_test = random.sample(idx_list, n_samples)
+
+    keys_test = keys_array[idx_test].tolist()
+    return keys_test
+
+
 def do_stratified_cv(
     img_keys: List[str],
     folds: Optional[int],
@@ -113,12 +136,8 @@ def do_stratified_cv(
     random_state: Optional[int] = None,
 ) -> Tuple[List[Any], ...]:
     """Perform stratified cross-validation."""
-    keys_array = np.array(img_keys)
-    if meta_dict is not None:
-        strat_dict = get_strat_dict(meta_dict)
-        strat_var_array = np.array([strat_dict.get(k) for k in img_keys])
-    else:
-        strat_var_array = np.ones(len(keys_array))
+    # Get stratification objects
+    strat_dict, keys_array, strat_var_array = _get_strat_objects(img_keys, meta_dict)
 
     if folds is None:
         raise ValueError('Please provide number of folds in cross-validation.')
@@ -140,39 +159,7 @@ def do_stratified_cv(
     return keys_train, keys_test
 
 
-def do_stratified_sampling(
-    img_keys: List[str],
-    n_samples: int,
-    meta_dict: Optional[Dict] = None,
-    random_state: Optional[int] = None,
-) -> List[str]:
-    """Sample in stratified manner."""
-    keys_array = np.array(img_keys)
-    if meta_dict is not None:
-        strat_dict = get_strat_dict(meta_dict)
-        strat_var_array = np.array([strat_dict.get(k) for k in img_keys])
-    else:
-        strat_var_array = np.ones(len(keys_array))
-    # Split intro train and test keys
-    sss = StratifiedShuffleSplit(
-        n_splits=1,
-        test_size=n_samples,
-        random_state=random_state,
-    )
-    print('---> Draw stratified sample')
-    try:
-        _, idx_test = next(iter(sss.split(keys_array, strat_var_array)))
-    except ValueError:
-        print('Too little class support for stratification, using random splits.')
-        random.seed(random_state)
-        idx_list = list(range(len(keys_array)))
-        idx_test = random.sample(idx_list, n_samples)
-
-    keys_test = keys_array[idx_test].tolist()
-    return keys_test
-
-
-def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
+def _get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
     """Create stratifying variable for dataset splitting."""
     if len(meta_dict) == 0:
         return {}
@@ -189,6 +176,20 @@ def get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
             concat = '_'.join([str(v) for v in meta_dict[k].values()])
             strat_dict.update({k: concat})
         return strat_dict
+
+
+def _get_strat_objects(
+    img_keys: List[str], meta_dict: Optional[Dict] = None
+) -> Tuple[Dict, np.array, np.array]:
+    """Get internal objects for stratified splitting / sampling / CV."""
+    keys_array = np.array(img_keys)
+    if meta_dict is not None:
+        strat_dict = _get_strat_dict(meta_dict)
+        strat_var_array = np.array([strat_dict.get(k) for k in img_keys])
+    else:
+        strat_dict = {}
+        strat_var_array = np.ones(len(keys_array))
+    return strat_dict, keys_array, strat_var_array
 
 
 # --------------------------------------------------------------------------------------
