@@ -11,6 +11,7 @@ from typing import (
 )
 
 import numpy as np
+import numpy.typing as npt
 from PIL import Image, ImageDraw
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
@@ -180,7 +181,7 @@ def _get_strat_dict(meta_dict: Dict[str, Dict]) -> Dict[str, str]:
 
 def _get_strat_objects(
     img_keys: List[str], meta_dict: Optional[Dict] = None
-) -> Tuple[Dict, np.array, np.array]:
+) -> Tuple[Dict, npt.NDArray, npt.NDArray]:
     """Get internal objects for stratified splitting / sampling / CV."""
     keys_array = np.array(img_keys)
     if meta_dict is not None:
@@ -221,12 +222,12 @@ def separate_empties(
 
 
 def map_preds_to_img(
-    preds: np.ndarray,
+    preds: npt.NDArray,
     bbox_keys: List[str],
     mapping_dict: Dict,
     detector_dict: Dict,
     empty_class_id: Optional[int] = None,
-) -> Dict[Any, np.ndarray]:
+) -> Dict[Any, npt.NDArray]:
     """Map predictions on bbox level back to img level."""
     num_classes = preds.shape[1]
     if empty_class_id is None:
