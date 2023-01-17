@@ -72,17 +72,20 @@ class ActiveLearner:
         self.acq_logfile_path = acq_logfile_path
         self.empty_class_id = empty_class_id
 
+        self.meta_dict = meta_dict
         self.acquisitor = AcquisitorFactory.get(
-            acquisitor_name, top_k=al_batch_size, random_state=random_state
+            acquisitor_name,
+            top_k=al_batch_size,
+            random_state=random_state,
+            stratified=True if self.meta_dict is not None else False,
+            meta_dict=self.meta_dict,
         )
         self.al_batch_size = al_batch_size
         self.random_state = random_state
         self.state_cache_file = state_cache
         self.do_fresh_start = start_fresh
         self.start_keys = start_keys
-
         self.train_size = train_size
-        self.meta_dict = meta_dict
 
         # Serves as storage for all active keys and labels.
         self.active_labels: Dict[str, float] = {}
