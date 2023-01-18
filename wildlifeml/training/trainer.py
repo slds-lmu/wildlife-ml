@@ -131,7 +131,6 @@ class WildlifeTrainer(BaseTrainer):
             print('---> Starting transfer learning')
             for layer in self.model.get_layer(self.model_backbone).layers:
                 layer.trainable = False
-            breakpoint()
 
             self.model.fit(
                 x=train_dataset,
