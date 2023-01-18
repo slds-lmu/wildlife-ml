@@ -142,7 +142,7 @@ class WildlifeTrainer(BaseTrainer):
                 use_multiprocessing=self.num_workers > 0,
             )
 
-        if self.finetune_epochs > 0:
+        if self.finetune_epochs > 0 and self.finetune_layers > 0:
             print(f'---> Unfreezing last {self.finetune_layers} layers')
             bbone_layers = self.model.get_layer(self.model_backbone).layers
             for layer in bbone_layers[: -self.finetune_layers]:
