@@ -144,12 +144,12 @@ class WildlifeTrainer(BaseTrainer):
 
         if self.finetune_epochs > 0:
             print(f'---> Unfreezing last {self.finetune_layers} layers')
-            breakpoint()
             bbone_layers = self.model.get_layer(self.model_backbone).layers
             for layer in bbone_layers[: -self.finetune_layers]:
                 layer.trainable = False
             for layer in bbone_layers[-self.finetune_layers :]:
                 layer.trainable = True
+            breakpoint()
 
             print('---> Compiling model')
             self.model.compile(
