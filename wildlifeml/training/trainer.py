@@ -149,7 +149,6 @@ class WildlifeTrainer(BaseTrainer):
                 layer.trainable = False
             for layer in bbone_layers[-self.finetune_layers :]:
                 layer.trainable = True
-            breakpoint()
 
             print('---> Compiling model')
             self.model.compile(
