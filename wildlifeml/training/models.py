@@ -11,7 +11,7 @@ AVAILABLE_MODELS: Final = {
         'input_shape': (224, 224, 3),
         'preproc_func': tf.keras.applications.resnet_v2.preprocess_input,
     },
-    'inceptionresnetv2': {
+    'inception_resnet_v2': {
         'model': tf.keras.applications.InceptionResNetV2,
         'input_shape': (299, 299, 3),
         'preproc_func': tf.keras.applications.inception_resnet_v2.preprocess_input,
