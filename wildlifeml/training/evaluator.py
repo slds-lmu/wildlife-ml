@@ -188,8 +188,10 @@ class Evaluator:
     def get_details(self) -> Dict:
         """Obtain further details about predictions."""
         return {
-            'keys_bbox': self.empty_keys + self.bbox_keys,
-            'preds_bbox': np.concatenate([self.empty_pred_arr, self.preds]),
+            'keys_bbox_empty': self.empty_keys,
+            'keys_bbox_nonempty': self.bbox_keys,
+            'preds_bbox_empty': self.empty_pred_arr,
+            'preds_bbox_nonempty': self.preds,
             'preds_imgs': self.preds_imgs,
             'truth_imgs': self.y_trues,
         }
