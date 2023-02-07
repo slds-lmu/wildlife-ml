@@ -111,22 +111,11 @@ class Evaluator:
         )
         y_preds = [np.argmax(v) for v in self.preds_imgs.values()]
         self.y_trues = [self.label_dict[k] for k in self.preds_imgs.keys()]
-        breakpoint()
 
         # Compute metrics on final predictions
         metrics = Evaluator.compute_metrics(
             self, y_true=np.asarray(self.y_trues), y_pred=np.asarray(y_preds)
         )
-
-        # Lastly, add keras metrics
-        # trainer.compile_model()
-        # keras_metrics = dict(
-        #     zip(
-        #         trainer.get_model().metrics_names,
-        #         trainer.get_model().evaluate(self.dataset),
-        #     )
-        # )
-        # metrics.update({'keras_metrics': keras_metrics})
 
         if verbose:
             print(
