@@ -41,6 +41,7 @@ class ActiveLearner:
         trainer: BaseTrainer,
         pool_dataset: WildlifeDataset,
         label_file_path: str,
+        conf_threshold: float,
         empty_class_id: Optional[int] = None,
         al_batch_size: int = 10,
         active_directory: str = 'active-wildlife',
@@ -59,6 +60,7 @@ class ActiveLearner:
         self.pool_dataset = pool_dataset
         self.unlabeled_dataset = deepcopy(self.pool_dataset)
         self.labeled_dataset = subset_dataset(self.pool_dataset, keys=[])
+        self.conf_threshold = conf_threshold
 
         self.dir_img = self.pool_dataset.img_dir
         self.dir_act = active_directory
@@ -102,6 +104,7 @@ class ActiveLearner:
                     dataset=test_dataset,
                     empty_class_id=self.empty_class_id,
                     num_classes=trainer.get_num_classes(),
+                    conf_threshold=self.conf_threshold,
                 )
 
     def run(self) -> None:
