@@ -403,14 +403,13 @@ class ActiveLearner:
             print('No test dataset was specified. Evaluation is skipped.')
             return
 
-        _ = self.evaluator.evaluate(self.trainer)
+        self.evaluator.evaluate(self.trainer)
         details = self.evaluator.get_details()
 
         if self.test_logfile_path is not None:
             log = {}
             if os.path.exists(self.test_logfile_path):
                 log.update(load_pickle(self.test_logfile_path))
-
             log.update({f'iteration {self.active_counter}': details})
             save_as_pickle(log, self.test_logfile_path)
 
