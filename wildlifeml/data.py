@@ -49,6 +49,7 @@ class WildlifeDataset(Sequence):
         do_cropping: bool = True,
         rescale_bbox: bool = True,
         pad: bool = True,
+        seed: int = 1337,
     ) -> None:
         """Initialize a WildlifeDataset object."""
         self.keys = keys
@@ -69,6 +70,7 @@ class WildlifeDataset(Sequence):
 
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.rng = random.Random(seed)
         if self.shuffle:
             self._exec_shuffle()
 
@@ -83,7 +85,7 @@ class WildlifeDataset(Sequence):
 
     def _exec_shuffle(self) -> None:
         """Shuffle the dataset."""
-        random.shuffle(self.keys)
+        self.rng.shuffle(self.keys)
 
     def on_epoch_end(self) -> None:
         """Execute after every epoch in the keras `.fit()` method."""
