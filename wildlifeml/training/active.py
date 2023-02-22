@@ -388,6 +388,8 @@ class ActiveLearner:
             self.labeled_dataset,
             flatten_list([self.labeled_dataset.mapping_dict[k] for k in keys_val]),
         )
+        val_dataset.shuffle = False
+        val_dataset.augmentation = None
 
         # Train model
         self.trainer.reset_model()
