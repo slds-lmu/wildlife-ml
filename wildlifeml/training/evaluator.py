@@ -61,10 +61,10 @@ class Evaluator:
         self.empty_keys = list(set(dataset.keys).intersection(set(empty_keys_md)))
 
         # Remove keys from dataset where MD detects no bbox
-        self.bbox_keys = list(set(dataset.keys) - set(self.empty_keys))
+        self.nonempty_keys = list(set(dataset.keys) - set(self.empty_keys))
 
         # Only register samples that are not filtered by MD
-        self.dataset = subset_dataset(dataset, keys=self.bbox_keys)
+        self.dataset = subset_dataset(dataset, keys=self.nonempty_keys)
         self.dataset.shuffle = False
 
         # Dirty fix for determining which Keras class predictions
@@ -85,10 +85,12 @@ class Evaluator:
         )
         self.empty_pred_arr[:, self.empty_class_id] = 1.0
         self.preds = np.empty(0)
-        self.preds_imgs: Dict = {}
-        self.y_trues: List = []
+        self.preds_imgs_clf: Dict = {}
+        self.preds_imgs_ppl: Dict = {}
+        self.truth_imgs_clf: List = []
+        self.truth_imgs_ppl: List = []
 
-    def evaluate(self, trainer: BaseTrainer, verbose: bool = True) -> Dict:
+    def evaluate(self, trainer: BaseTrainer) -> None:
         """Obtain metrics for a supplied model."""
         # Get predictions for bboxs
         self.preds = trainer.predict(self.dataset)
@@ -102,39 +104,35 @@ class Evaluator:
         all_preds = np.concatenate([self.empty_pred_arr, self.preds])
 
         # Compute majority voting predictions on image level
-        self.preds_imgs = map_preds_to_img(
-            bbox_keys=self.empty_keys + self.bbox_keys,
+        self.preds_imgs_clf = map_preds_to_img(
+            bbox_keys=self.nonempty_keys,
+            preds=self.preds,
+            mapping_dict=self.bbox_map,
+            detector_dict=self.detector_dict,
+            empty_class_id=self.empty_class_id,
+        )
+        self.preds_imgs_ppl = map_preds_to_img(
+            bbox_keys=self.empty_keys + self.nonempty_keys,
             preds=all_preds,
             mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
             empty_class_id=self.empty_class_id,
         )
-        y_preds = [np.argmax(v) for v in self.preds_imgs.values()]
-        self.y_trues = [self.label_dict[k] for k in self.preds_imgs.keys()]
+        self.truth_imgs_clf = [self.label_dict[k] for k in self.preds_imgs_clf.keys()]
+        self.truth_imgs_ppl = [self.label_dict[k] for k in self.preds_imgs_ppl.keys()]
 
-        # Compute metrics on final predictions
-        metrics = Evaluator.compute_metrics(
-            self, y_true=np.asarray(self.y_trues), y_pred=np.asarray(y_preds)
-        )
-
-        # Lastly, add keras metrics
-        trainer.compile_model()
-        keras_metrics = dict(
-            zip(
-                trainer.get_model().metrics_names,
-                trainer.get_model().evaluate(self.dataset),
-            )
-        )
-        metrics.update({'keras_metrics': keras_metrics})
-
-        if verbose:
-            print(
-                'ACC: {:.3f}\t|\tPREC: {:.3f}\t|\tREC: {:.3f}\t|\tF1 : {:.3f}'.format(
-                    metrics['acc'], metrics['prec'], metrics['rec'], metrics['f1']
-                )
-            )
-
-        return metrics
+    def get_details(self) -> Dict:
+        """Obtain further details about predictions."""
+        return {
+            'keys_bbox_empty': self.empty_keys,
+            'keys_bbox_nonempty': self.nonempty_keys,
+            'preds_bbox_empty': self.empty_pred_arr,
+            'preds_bbox_nonempty': self.preds,
+            'preds_imgs_clf': self.preds_imgs_clf,
+            'preds_imgs_ppl': self.preds_imgs_ppl,
+            'truth_imgs_clf': self.truth_imgs_clf,
+            'truth_imgs_ppl': self.truth_imgs_ppl,
+        }
 
     def compute_metrics(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
         """Compute eval metrics for predictions."""
@@ -182,13 +180,4 @@ class Evaluator:
             'rec': rec,
             'f1': f1,
             'conf_empty': conf_empty,
-        }
-
-    def get_details(self) -> Dict:
-        """Obtain further details about predictions."""
-        return {
-            'keys_bbox': self.empty_keys + self.bbox_keys,
-            'preds_bbox': np.concatenate([self.empty_pred_arr, self.preds]),
-            'preds_imgs': self.preds_imgs,
-            'truth_imgs': self.y_trues,
         }
