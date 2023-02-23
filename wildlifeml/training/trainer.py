@@ -17,7 +17,8 @@ from tensorflow.keras.utils import Sequence
 from wildlifeml.training.models import ModelFactory
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
+if len(gpus) > 0:
+    tf.config.experimental.set_memory_growth(gpus[0], True)
 
 TUNABLE: Final[List[str]] = [
     'batch_size',
@@ -125,7 +126,7 @@ class WildlifeTrainer(BaseTrainer):
                 optimizer=self.transfer_optimizer,
                 loss=self.loss_func,
                 metrics=self.eval_metrics,
-                run_eagerly=True,
+                # run_eagerly=True,
             )
 
             print('---> Starting transfer learning')
@@ -140,6 +141,7 @@ class WildlifeTrainer(BaseTrainer):
                 callbacks=self.transfer_callbacks,
                 workers=self.num_workers,
                 use_multiprocessing=self.num_workers > 0,
+                shuffle=False,
             )
 
         if self.finetune_epochs > 0 and self.finetune_layers > 0:
@@ -155,7 +157,7 @@ class WildlifeTrainer(BaseTrainer):
                 optimizer=self.finetune_optimizer,
                 loss=self.loss_func,
                 metrics=self.eval_metrics,
-                run_eagerly=True,
+                # run_eagerly=True,
             )
 
             print('---> Starting fine tuning')
@@ -167,6 +169,7 @@ class WildlifeTrainer(BaseTrainer):
                 callbacks=self.finetune_callbacks,
                 workers=self.num_workers,
                 use_multiprocessing=self.num_workers > 0,
+                shuffle=False,
             )
 
         return self.model
