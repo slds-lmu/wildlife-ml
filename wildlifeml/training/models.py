@@ -30,10 +30,6 @@ AVAILABLE_MODELS: Final = {
         'model': tf.keras.applications.DenseNet201,
         'preproc_func': tf.keras.applications.densenet.preprocess_input,
     },
-    'convnext_tiny': {
-        'model': tf.keras.applications.convnext.ConvNeXtTiny,
-        'preproc_func': tf.keras.applications.convnext.preprocess_input,
-    },
 }
 
 
