@@ -8,33 +8,31 @@ from tensorflow.keras.models import Sequential
 AVAILABLE_MODELS: Final = {
     'resnet50': {
         'model': tf.keras.applications.ResNet50V2,
-        'input_shape': (224, 224, 3),
         'preproc_func': tf.keras.applications.resnet_v2.preprocess_input,
     },
     'inception_resnet_v2': {
         'model': tf.keras.applications.InceptionResNetV2,
-        'input_shape': (299, 299, 3),
         'preproc_func': tf.keras.applications.inception_resnet_v2.preprocess_input,
     },
     'vgg19': {
         'model': tf.keras.applications.VGG19,
-        'input_shape': (224, 224, 3),
         'preproc_func': tf.keras.applications.vgg19.preprocess_input,
     },
     'xception': {
         'model': tf.keras.applications.Xception,
-        'input_shape': (299, 299, 3),
         'preproc_func': tf.keras.applications.xception.preprocess_input,
     },
     'densenet121': {
         'model': tf.keras.applications.DenseNet121,
-        'input_shape': (224, 224, 3),
         'preproc_func': tf.keras.applications.densenet.preprocess_input,
     },
     'densenet201': {
         'model': tf.keras.applications.DenseNet201,
-        'input_shape': (224, 224, 3),
         'preproc_func': tf.keras.applications.densenet.preprocess_input,
+    },
+    'convnext_tiny': {
+        'model': tf.keras.applications.convnext.ConvNeXtTiny,
+        'preproc_func': tf.keras.applications.convnext.preprocess_input,
     },
 }
 

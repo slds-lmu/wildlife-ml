@@ -70,6 +70,7 @@ class WildlifeDataset(Sequence):
 
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.seed = seed
         self.rng = random.Random(seed)
         if self.shuffle:
             self._exec_shuffle()
@@ -119,6 +120,7 @@ class WildlifeDataset(Sequence):
 
             # Apply data augmentations to image
             if self.augmentation is not None:
+                random.seed(self.seed)
                 img = self.augmentation(image=img)['image']
 
             imgs.append(img)
