@@ -6,6 +6,12 @@ from typing import (
 )
 
 import numpy as np
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 
 from wildlifeml.data import (
     BBoxMapper,
@@ -126,4 +132,58 @@ class Evaluator:
             'preds_imgs_ppl': self.preds_imgs_ppl,
             'truth_imgs_clf': self.truth_imgs_clf,
             'truth_imgs_ppl': self.truth_imgs_ppl,
+        }
+
+    def compute_metrics(self) -> Dict:
+        """Compute eval metrics for predictions."""
+        return self._compute_metrics(
+            np.array(self.truth_imgs_ppl),
+            np.array([np.argmax(v) for v in self.preds_imgs_ppl.values()]),
+        )
+
+    def _compute_metrics(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
+        """Compute eval metrics for predictions."""
+        acc = accuracy_score(y_true=y_true, y_pred=y_pred)
+        prec = precision_score(
+            y_true=y_true,
+            y_pred=y_pred,
+            average='macro',
+            zero_division=0,
+        )
+        rec = recall_score(
+            y_true=y_true,
+            y_pred=y_pred,
+            average='macro',
+            zero_division=0,
+        )
+        f1 = f1_score(
+            y_true=y_true,
+            y_pred=y_pred,
+            average='macro',
+            zero_division=0,
+        )
+        tp, tn, fp, fn = 0, 0, 0, 0
+        for true, pred in zip(y_true, y_pred):
+            if true == self.empty_class_id:
+                if true == pred:
+                    tn += 1
+                else:
+                    fp += 1
+            else:
+                if pred == self.empty_class_id:
+                    fn += 1
+                else:
+                    tp += 1
+        conf_empty = {
+            'tnr': tn / (tn + fp) if (tn + fp) > 0 else 0.0,
+            'tpr': tp / (tp + fn) if (tp + fn) > 0 else 0.0,
+            'fnr': fn / (tp + fn) if (tp + fn) > 0 else 0.0,
+            'fpr': fp / (tn + fp) if (tn + fp) > 0 else 0.0,
+        }
+        return {
+            'acc': acc,
+            'prec': prec,
+            'rec': rec,
+            'f1': f1,
+            'conf_empty': conf_empty,
         }
