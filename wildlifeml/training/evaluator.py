@@ -147,33 +147,33 @@ class Evaluator:
         prec = precision_score(
             y_true=y_true,
             y_pred=y_pred,
-            average='macro',
+            average='weighted',
             zero_division=0,
         )
         rec = recall_score(
             y_true=y_true,
             y_pred=y_pred,
-            average='macro',
+            average='weighted',
             zero_division=0,
         )
         f1 = f1_score(
             y_true=y_true,
             y_pred=y_pred,
-            average='macro',
+            average='weighted',
             zero_division=0,
         )
         tp, tn, fp, fn = 0, 0, 0, 0
         for true, pred in zip(y_true, y_pred):
             if true == self.empty_class_id:
                 if true == pred:
-                    tn += 1
+                    tp += 1
                 else:
-                    fp += 1
+                    fn += 1
             else:
                 if pred == self.empty_class_id:
-                    fn += 1
+                    fp += 1
                 else:
-                    tp += 1
+                    tn += 1
         conf_empty = {
             'tnr': tn / (tn + fp) if (tn + fp) > 0 else 0.0,
             'tpr': tp / (tp + fn) if (tp + fn) > 0 else 0.0,
