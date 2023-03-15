@@ -224,35 +224,34 @@ def separate_empties(
 def map_preds_to_img(
     preds: npt.NDArray,
     bbox_keys: List[str],
-    mapping_dict: Dict,
     detector_dict: Dict,
-    empty_class_id: Optional[int] = None,
+    empty_class_id: int,
 ) -> Dict[Any, npt.NDArray]:
     """Map predictions on bbox level back to img level."""
     num_classes = preds.shape[1]
-    if empty_class_id is None:
-        empty_class_id = num_classes - 1
     preds_bboxes_dict = {j: preds[i, ...] for i, j in enumerate(bbox_keys)}
-    preds_imgs = {}
+    preds_imgs: Dict = {}
 
-    for img, bbox_list in mapping_dict.items():
-        pred = np.zeros(num_classes, dtype=float)
-        confs = []
-        nonempty_preds = [
-            bbox
-            for bbox in bbox_list
-            if (
-                bbox in preds_bboxes_dict.keys()
-                and preds_bboxes_dict[bbox].argmax() != empty_class_id
-            )
-        ]
-        if len(nonempty_preds) > 0:
-            bbox_list = nonempty_preds
-        for bbox in bbox_list:
-            if bbox in preds_bboxes_dict.keys():
-                conf = detector_dict[bbox].get('conf') or 0.0
+    relevant_imgs = set([map_bbox_to_img(k) for k in bbox_keys])
+    for img in relevant_imgs:
+        preds_bboxes_img = {k: v for k, v in preds_bboxes_dict.items() if img in k}
+        if len(preds_bboxes_img.keys()) == 1:
+            pred = list(preds_bboxes_img.values())[0]
+        else:
+            confs: List = []
+            for k, v in preds_bboxes_img.items():
+                if np.argmax(preds_bboxes_img[k]) == empty_class_id:
+                    conf = 0.0
+                else:
+                    conf = detector_dict[k].get('conf') or 0.0
                 confs.append(conf)
-                pred += preds_bboxes_dict[bbox] * conf
-        if sum(pred) > 0:  # only include imgs for which predictions have been made
-            preds_imgs.update({img: pred / sum(confs)})
+            pred = np.zeros(num_classes, dtype=float)
+            weights = 0.0
+            for k, c in zip(preds_bboxes_img.keys(), confs):
+                weight = c if sum(confs) > 0 else 1 / len(confs)
+                weights += weight
+                pred += preds_bboxes_img[k] * weight
+            pred /= weights
+        preds_imgs.update({img: pred})
+
     return preds_imgs

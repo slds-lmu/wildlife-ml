@@ -107,14 +107,12 @@ class Evaluator:
         self.preds_imgs_clf = map_preds_to_img(
             bbox_keys=self.nonempty_keys,
             preds=self.preds,
-            mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
             empty_class_id=self.empty_class_id,
         )
         self.preds_imgs_ppl = map_preds_to_img(
             bbox_keys=self.empty_keys + self.nonempty_keys,
             preds=all_preds,
-            mapping_dict=self.bbox_map,
             detector_dict=self.detector_dict,
             empty_class_id=self.empty_class_id,
         )
