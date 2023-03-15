@@ -42,7 +42,7 @@ class ActiveLearner:
         pool_dataset: WildlifeDataset,
         label_file_path: str,
         conf_threshold: float,
-        empty_class_id: Optional[int] = None,
+        empty_class_id: int,
         al_batch_size: int = 10,
         active_directory: str = 'active-wildlife',
         acquisitor_name: str = 'random',
@@ -139,7 +139,6 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         preds = self.predict_img(
             dataset=self.unlabeled_dataset,
-            mapping_dict=self.unlabeled_dataset.mapping_dict,
             detector_file_path=self.unlabeled_dataset.detector_file_path,
         )
         staging_keys = self.acquisitor(preds)
@@ -422,7 +421,6 @@ class ActiveLearner:
     def predict_img(
         self,
         dataset: WildlifeDataset,
-        mapping_dict: Dict,
         detector_file_path: str,
     ) -> Dict:
         """Obtain img-level predictions."""
@@ -431,7 +429,6 @@ class ActiveLearner:
         preds_imgs = map_preds_to_img(
             preds=preds_bboxes,
             bbox_keys=dataset.keys,
-            mapping_dict=mapping_dict,
             detector_dict=detector_dict,
             empty_class_id=self.empty_class_id,
         )
