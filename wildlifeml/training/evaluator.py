@@ -118,7 +118,6 @@ class Evaluator:
         )
         self.truth_imgs_clf = [self.label_dict[k] for k in self.preds_imgs_clf.keys()]
         self.truth_imgs_ppl = [self.label_dict[k] for k in self.preds_imgs_ppl.keys()]
-        breakpoint()
 
     def get_details(self) -> Dict:
         """Obtain further details about predictions."""
