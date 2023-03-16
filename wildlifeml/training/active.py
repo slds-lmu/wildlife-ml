@@ -14,7 +14,7 @@ from wildlifeml.data import WildlifeDataset, subset_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
 from wildlifeml.training.evaluator import Evaluator
-from wildlifeml.training.trainer import BaseTrainer
+from wildlifeml.training.trainer import BaseTrainer, WildlifeTrainer
 from wildlifeml.utils.datasets import (
     do_stratified_splitting,
     map_bbox_to_img,
@@ -393,10 +393,6 @@ class ActiveLearner:
         self.trainer.reset_model()
         self.trainer.fit(train_dataset, val_dataset)
 
-    def get_model(self) -> Model:
-        """Return current model instance."""
-        return self.trainer.get_model()
-
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
         if self.test_dataset is None:
@@ -432,3 +428,11 @@ class ActiveLearner:
             empty_class_id=self.empty_class_id,
         )
         return preds_imgs
+
+    def get_model(self) -> Model:
+        """Return current model instance."""
+        return self.trainer.get_model()
+
+    def set_trainer(self, trainer: WildlifeTrainer):
+        """Reset trainer object."""
+        self.trainer = trainer
