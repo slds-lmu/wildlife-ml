@@ -14,7 +14,7 @@ from wildlifeml.data import WildlifeDataset, subset_dataset
 from wildlifeml.preprocessing.cropping import Cropper
 from wildlifeml.training.acquisitor import AcquisitorFactory
 from wildlifeml.training.evaluator import Evaluator
-from wildlifeml.training.trainer import BaseTrainer
+from wildlifeml.training.trainer import BaseTrainer, WildlifeTrainer
 from wildlifeml.utils.datasets import (
     do_stratified_splitting,
     map_bbox_to_img,
@@ -25,7 +25,6 @@ from wildlifeml.utils.io import (
     load_csv,
     load_image,
     load_json,
-    load_pickle,
     save_as_csv,
     save_as_json,
     save_as_pickle,
@@ -394,25 +393,21 @@ class ActiveLearner:
         self.trainer.reset_model()
         self.trainer.fit(train_dataset, val_dataset)
 
-    def get_model(self) -> Model:
-        """Return current model instance."""
-        return self.trainer.get_model()
-
     def evaluate(self) -> None:
         """Evaluate the model on the eval dataset."""
         if self.test_dataset is None:
             print('No test dataset was specified. Evaluation is skipped.')
             return
-
-        self.evaluator.evaluate(self.trainer)
-        details = self.evaluator.get_details()
-
         if self.test_logfile_path is not None:
-            log = {}
-            if os.path.exists(self.test_logfile_path):
-                log.update(load_pickle(self.test_logfile_path))
-            log.update({f'iteration {self.active_counter}': details})
-            save_as_pickle(log, self.test_logfile_path)
+            self.evaluator.evaluate(self.trainer)
+            details = self.evaluator.get_details()
+            save_as_pickle(
+                details,
+                os.path.join(
+                    self.test_logfile_path,
+                    f'results_iteration_{self.active_counter}.pkl',
+                ),
+            )
 
     def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
         """Obtain bbox-level predictions."""
@@ -433,3 +428,11 @@ class ActiveLearner:
             empty_class_id=self.empty_class_id,
         )
         return preds_imgs
+
+    def get_model(self) -> Model:
+        """Return current model instance."""
+        return self.trainer.get_model()
+
+    def set_trainer(self, trainer: WildlifeTrainer):
+        """Reset trainer object."""
+        self.trainer = trainer
