@@ -179,12 +179,6 @@ class ActiveLearner:
         os.makedirs(self.dir_act, exist_ok=True)
         os.makedirs(os.path.join(self.dir_act, 'images'), exist_ok=True)
 
-        # Remove old log file
-        if self.test_logfile_path is not None and os.path.exists(
-            self.test_logfile_path
-        ):
-            os.remove(self.test_logfile_path)
-
         if self.start_keys is None:
             print(
                 f'For this fresh start, {self.al_batch_size} images are randomly '
@@ -401,13 +395,13 @@ class ActiveLearner:
         if self.test_logfile_path is not None:
             self.evaluator.evaluate(self.trainer)
             details = self.evaluator.get_details()
-            save_as_pickle(
-                details,
-                os.path.join(
-                    self.test_logfile_path,
-                    f'results_iteration_{self.active_counter}.pkl',
-                ),
+            filename = os.path.join(
+                self.test_logfile_path, f'results_iteration_{self.active_counter}.pkl'
             )
+            # Remove old log file
+            if os.path.exists(filename):
+                os.remove(filename)
+            save_as_pickle(details, filename)
 
     def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
         """Obtain bbox-level predictions."""
