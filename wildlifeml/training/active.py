@@ -25,7 +25,6 @@ from wildlifeml.utils.io import (
     load_csv,
     load_image,
     load_json,
-    load_pickle,
     save_as_csv,
     save_as_json,
     save_as_pickle,
@@ -403,16 +402,16 @@ class ActiveLearner:
         if self.test_dataset is None:
             print('No test dataset was specified. Evaluation is skipped.')
             return
-
-        self.evaluator.evaluate(self.trainer)
-        details = self.evaluator.get_details()
-
         if self.test_logfile_path is not None:
-            log = {}
-            if os.path.exists(self.test_logfile_path):
-                log.update(load_pickle(self.test_logfile_path))
-            log.update({f'iteration {self.active_counter}': details})
-            save_as_pickle(log, self.test_logfile_path)
+            self.evaluator.evaluate(self.trainer)
+            details = self.evaluator.get_details()
+            save_as_pickle(
+                details,
+                os.path.join(
+                    self.test_logfile_path,
+                    f'results_iteration_{self.active_counter}.pkl',
+                ),
+            )
 
     def predict_bbox(self, dataset: WildlifeDataset) -> Dict:
         """Obtain bbox-level predictions."""
