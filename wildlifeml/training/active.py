@@ -252,11 +252,11 @@ class ActiveLearner:
             width, height = img.size
             x_coords, y_coords = [], []
             for bkey in bbox_keys:
-                x, y = Cropper.get_absolute_coords(
-                    self.pool_dataset.detector_dict[bkey].get('bbox'), (height, width)
-                )
-                x_coords.append(x)
-                y_coords.append(y)
+                box = self.pool_dataset.detector_dict[bkey].get('bbox')
+                if box is not None:
+                    x, y = Cropper.get_absolute_coords(box, (height, width))
+                    x_coords.append(x)
+                    y_coords.append(y)
             img = render_bbox(img, x_coords, y_coords)
             img.save(os.path.join(target_path, key))
 
