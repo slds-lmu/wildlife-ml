@@ -120,26 +120,31 @@ class ActiveLearner:
         # ------------------------------------------------------------------------------
         # COLLECT RESULTS
         # ------------------------------------------------------------------------------
+        print('---> Collecting user input')
         self.collect()
 
         # ------------------------------------------------------------------------------
         # FIT MODEL INCLUDING FRESH DATA
         # ------------------------------------------------------------------------------
+        print('---> Training model')
         self.fit()
 
         # ------------------------------------------------------------------------------
         # EVALUATE MODEL
         # ------------------------------------------------------------------------------
+        print('---> Evaluating model')
         if self.test_dataset is not None:
             self.evaluate()
 
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
+        print('---> Predicting on unlabeled data')
         preds = self.predict_img(
             dataset=self.unlabeled_dataset,
             detector_file_path=self.unlabeled_dataset.detector_file_path,
         )
+        print('---> Selecting instances to be labeled')
         staging_keys = self.acquisitor(preds)
         self.fill_active_stage(staging_keys)
         self.save_state()
