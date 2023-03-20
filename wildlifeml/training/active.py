@@ -92,6 +92,7 @@ class ActiveLearner:
         self.active_labels: Dict[str, float] = {}
         # Count active learning iterations
         self.active_counter = 0
+        self.is_final_iteration: bool = False
         # Set up evaluator
         if test_dataset is not None:
             if test_dataset.label_file_path is None:
@@ -135,10 +136,14 @@ class ActiveLearner:
         print('---> Evaluating model')
         if self.test_dataset is not None:
             self.evaluate()
+        if self.is_final_iteration:
+            print('---> Finished active learning')
+            return
 
         # ------------------------------------------------------------------------------
         # SELECT NEW CANDIDATES
         # ------------------------------------------------------------------------------
+
         print('---> Predicting on unlabeled data')
         preds = self.predict_img(
             dataset=self.unlabeled_dataset,
@@ -432,6 +437,14 @@ class ActiveLearner:
         """Return current model instance."""
         return self.trainer.get_model()
 
+    def set_batch_size(self, batch_size: int):
+        """Reset batch size."""
+        self.al_batch_size = batch_size
+
     def set_trainer(self, trainer: WildlifeTrainer):
         """Reset trainer object."""
         self.trainer = trainer
+
+    def set_final(self):
+        """Mark iteration as final, s.t. no new labels are acquired after evaluation."""
+        self.is_final_iteration = True
