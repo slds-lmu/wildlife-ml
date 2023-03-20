@@ -74,14 +74,15 @@ class ActiveLearner:
         self.empty_class_id = empty_class_id
 
         self.meta_dict = meta_dict
+        self.acquisitor_name = acquisitor_name
+        self.al_batch_size = al_batch_size
         self.acquisitor = AcquisitorFactory.get(
             acquisitor_name,
-            top_k=al_batch_size,
+            top_k=self.al_batch_size,
             random_state=random_state,
             stratified=True if self.meta_dict is not None else False,
             meta_dict=self.meta_dict,
         )
-        self.al_batch_size = al_batch_size
         self.random_state = random_state
         self.state_cache_file = state_cache
         self.do_fresh_start = start_fresh
@@ -212,7 +213,6 @@ class ActiveLearner:
             state = load_json(self.state_cache_file)
 
             self.dir_img = self.pool_dataset.img_dir
-            self.al_batch_size = state['al_batch_size']
             self.dir_act = state['active_directory']
             self.random_state = state['random_state']
             self.active_labels = state['active_labels']
@@ -220,7 +220,7 @@ class ActiveLearner:
             self.active_counter += 1
 
             self.acquisitor = AcquisitorFactory.get(
-                state['acquisitor_name'],
+                self.acquisitor_name,
                 top_k=self.al_batch_size,
                 random_state=self.random_state,
             )
@@ -234,10 +234,7 @@ class ActiveLearner:
     def save_state(self) -> None:
         """Save active learner state file in a file."""
         state = {
-            'image_directory': self.dir_img,
-            'al_batch_size': self.al_batch_size,
             'active_directory': self.dir_act,
-            'acquisitor_name': self.acquisitor.__str__(),
             'random_state': self.random_state,
             'active_labels': self.active_labels,
             'active_counter': self.active_counter,
