@@ -9,7 +9,6 @@ from typing import (  # Dict,; Tuple,
 
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
 from tensorflow.keras import Model
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.utils import Sequence
@@ -205,7 +204,7 @@ class WildlifeTrainer(BaseTrainer):
 
     def load_model(self, file_path: str) -> None:
         """Load a model from a checkpoint."""
-        self.model = keras.models.load_weights(file_path)
+        self.model.load_weights(file_path)
 
     def predict(self, dataset: Sequence) -> np.ndarray:
         """Make predictions according to trained model."""
