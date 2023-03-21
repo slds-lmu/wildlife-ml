@@ -91,7 +91,7 @@ class WildlifeTrainer(BaseTrainer):
         num_workers: int = 0,
         eval_metrics: Optional[List] = None,
         pretraining_checkpoint: Optional[str] = None,
-        input_shape: Optional[Tuple] = (224, 224, 3),
+        input_shape: Optional[Tuple] = (1, 224, 224, 3),
     ) -> None:
         """Initialize trainer object."""
         self.num_classes = num_classes
