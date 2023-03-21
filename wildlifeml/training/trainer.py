@@ -5,6 +5,7 @@ from typing import (  # Dict,; Tuple,
     Final,
     List,
     Optional,
+    Tuple,
 )
 
 import numpy as np
@@ -90,9 +91,11 @@ class WildlifeTrainer(BaseTrainer):
         num_workers: int = 0,
         eval_metrics: Optional[List] = None,
         pretraining_checkpoint: Optional[str] = None,
+        input_shape: Optional[Tuple] = (224, 224, 3),
     ) -> None:
         """Initialize trainer object."""
         self.num_classes = num_classes
+        self.input_shape = input_shape
         self.model_backbone = model_backbone
         self.pretraining_checkpoint = pretraining_checkpoint
         self.model = Sequential()
@@ -128,6 +131,7 @@ class WildlifeTrainer(BaseTrainer):
                 # run_eagerly=True,
             )
             if self.pretraining_checkpoint is not None:
+                self.model(np.zeros(self.input_shape))
                 self.load_model(self.pretraining_checkpoint)
 
             print('---> Starting transfer learning')
