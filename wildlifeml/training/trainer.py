@@ -127,6 +127,8 @@ class WildlifeTrainer(BaseTrainer):
                 metrics=self.eval_metrics,
                 # run_eagerly=True,
             )
+            if self.pretraining_checkpoint is not None:
+                self.load_model(self.pretraining_checkpoint)
 
             print('---> Starting transfer learning')
             for layer in self.model.get_layer(self.model_backbone).layers:
@@ -191,8 +193,6 @@ class WildlifeTrainer(BaseTrainer):
         self.model = ModelFactory.get(
             model_id=self.model_backbone, num_classes=self.num_classes
         )
-        if self.pretraining_checkpoint is not None:
-            self.load_model(self.pretraining_checkpoint)
 
     def save_model(self, file_path: str) -> None:
         """Save a model checkpoint."""
