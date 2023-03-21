@@ -205,7 +205,7 @@ class WildlifeTrainer(BaseTrainer):
 
     def load_model(self, file_path: str) -> None:
         """Load a model from a checkpoint."""
-        self.model = keras.models.load_model(file_path)
+        self.model = keras.models.load_weights(file_path)
 
     def predict(self, dataset: Sequence) -> np.ndarray:
         """Make predictions according to trained model."""
