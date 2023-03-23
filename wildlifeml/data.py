@@ -104,10 +104,16 @@ class WildlifeDataset(Sequence):
         end_idx = min(len(self.keys), start_idx + self.batch_size)
         batch_keys = self.keys[start_idx:end_idx]
 
+        imgs_processed = []
         imgs = []
         for key in batch_keys:
             entry = self.detector_dict[key]
             img = np.asarray(load_image(entry['file']))
+
+            # Skip if cropping is disabled and img has been processed before (otherwise,
+            # multiple un-cropped copies of the same image end up in the data)
+            if not self.do_cropping and entry['file'] in imgs_processed:
+                continue
 
             # Crop according to bounding box if applicable
             if self.do_cropping and entry.get('bbox') is not None:
@@ -124,6 +130,7 @@ class WildlifeDataset(Sequence):
                 img = self.augmentation(image=img)['image']
 
             imgs.append(img)
+            imgs_processed.append(entry['file'])
 
         # Extract labels
         if self.is_supervised:

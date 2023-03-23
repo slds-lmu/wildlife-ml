@@ -128,9 +128,9 @@ class WildlifeTrainer(BaseTrainer):
                 optimizer=self.transfer_optimizer,
                 loss=self.loss_func,
                 metrics=self.eval_metrics,
-                # run_eagerly=True,
             )
             if self.pretraining_checkpoint is not None:
+                # first line necessary to get architecture (not stored in .hd5)
                 self.model(np.zeros(self.input_shape))
                 self.load_model(self.pretraining_checkpoint)
 
