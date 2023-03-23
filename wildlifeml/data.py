@@ -113,6 +113,7 @@ class WildlifeDataset(Sequence):
             # Skip if cropping is disabled and img has been processed before (otherwise,
             # multiple un-cropped copies of the same image end up in the data)
             if not self.do_cropping and entry['file'] in imgs_processed:
+                del key
                 continue
 
             # Crop according to bounding box if applicable
