@@ -1,6 +1,6 @@
 # Welcome to **Wildlife ML**!
 
-Do you have a wildlife image database and are finding it challenging 
+Do you have a wildlife camera trap image database and are finding it challenging 
 to apply artificial intelligence systems due to the lack of labeled images?
 Look no further than our new GitHub repository, which provides a software package 
 designed specifically to help ecologists to leverage the potential of active learning 
