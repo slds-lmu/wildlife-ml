@@ -153,7 +153,7 @@ mapper = BBoxMapper(detector_file_path='<path_to_images_megadetector.json>')
 key_map = mapper.get_keymap()
 ```
 
-### 01: Creating a Wildlife Dataset
+### 03: Creating a Wildlife Dataset
 
 #### Initializing a Dataset
 
@@ -197,7 +197,7 @@ wd = WildlifeDataset(
 `do_cropping` is by default set to `True` and leads to the image being directly
 cropped to their respective bounding boxes when being loaded in the data process.
 
-### 03: Training a classifier
+### 04: Training a classifier
 
 `wildlife-ml` contains the `WildlifeTrainer` that is an interface for directly training
 a classifier on the MD processed wildlife data.
@@ -245,7 +245,7 @@ validation `WildlifeDataset`.
 trainer.fit(train_dataset, val_dataset)
 ```
 
-### 04: Evaluating a model
+### 05: Evaluating a model
 
 Due to our cascaded MD approach. The evaluation of the model requires a bit more
 care than a usual Keras model. 
@@ -283,7 +283,7 @@ evaluator.evaluate(trainer)
 metrics = evaluator.compute_metrics()
 ```
 
-### 05: Active Learning
+### 06: Active Learning
 
 Apart from fitting a model in a fully supervised way, we offer an active learning
 pipeline.
