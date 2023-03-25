@@ -52,7 +52,12 @@ class WildlifeDataset(Sequence):
         seed: int = 1337,
     ) -> None:
         """Initialize a WildlifeDataset object."""
-        self.keys = keys
+        self.do_cropping = do_cropping
+        if self.do_cropping:
+            self.keys = keys
+        else:  # pretend there is exactly 1 bbox/img to avoid copies of uncropped imgs
+            keys_stem = set([map_bbox_to_img(k) for k in keys])
+            self.keys = [k + '_001' for k in keys_stem]
         self.img_dir = image_dir
         self.label_file_path = label_file_path
         if label_file_path is not None:
@@ -77,7 +82,6 @@ class WildlifeDataset(Sequence):
 
         self.target_resolution = resolution
         self.augmentation = augmentation
-        self.do_cropping = do_cropping
         self.cropper = Cropper(rescale_bbox=rescale_bbox, pad=pad)
 
     def set_keys(self, keys: List[str]) -> None:
@@ -104,17 +108,10 @@ class WildlifeDataset(Sequence):
         end_idx = min(len(self.keys), start_idx + self.batch_size)
         batch_keys = self.keys[start_idx:end_idx]
 
-        imgs_processed = []
-        keys_processed = []
         imgs = []
         for key in batch_keys:
             entry = self.detector_dict[key]
             img = np.asarray(load_image(entry['file']))
-
-            # Skip if cropping is disabled and img has been processed before (otherwise,
-            # multiple un-cropped copies of the same image end up in the data)
-            if not self.do_cropping and entry['file'] in imgs_processed:
-                continue
 
             # Crop according to bounding box if applicable
             if self.do_cropping and entry.get('bbox') is not None:
@@ -131,13 +128,11 @@ class WildlifeDataset(Sequence):
                 img = self.augmentation(image=img)['image']
 
             imgs.append(img)
-            imgs_processed.append(entry['file'])
-            keys_processed.append(key)
 
         # Extract labels
         if self.is_supervised:
-            keys_processed_stem = [map_bbox_to_img(key) for key in keys_processed]
-            labels = np.asarray([self.label_dict[key] for key in keys_processed_stem])
+            batch_keys_stem = [map_bbox_to_img(key) for key in batch_keys]
+            labels = np.asarray([self.label_dict[key] for key in batch_keys_stem])
         else:
             # We need to add a dummy for unsupervised case because TF.
             labels = np.empty(shape=self.batch_size, dtype=float)

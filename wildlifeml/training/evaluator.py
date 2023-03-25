@@ -118,7 +118,6 @@ class Evaluator:
                 empty_class_id=self.empty_class_id,
             )
         else:
-            breakpoint()
             self.preds_imgs_clf = {
                 k: self.preds[idx, ...] for idx, k in enumerate(self.nonempty_keys)
             }
