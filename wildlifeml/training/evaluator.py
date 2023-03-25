@@ -104,27 +104,18 @@ class Evaluator:
         all_preds = np.concatenate([self.empty_pred_arr, self.preds])
 
         # Compute majority voting predictions on image level
-        if self.dataset.do_cropping:
-            self.preds_imgs_clf = map_preds_to_img(
-                bbox_keys=self.nonempty_keys,
-                preds=self.preds,
-                detector_dict=self.detector_dict,
-                empty_class_id=self.empty_class_id,
-            )
-            self.preds_imgs_ppl = map_preds_to_img(
-                bbox_keys=self.empty_keys + self.nonempty_keys,
-                preds=all_preds,
-                detector_dict=self.detector_dict,
-                empty_class_id=self.empty_class_id,
-            )
-        else:
-            self.preds_imgs_clf = {
-                k: self.preds[idx, ...] for idx, k in enumerate(self.nonempty_keys)
-            }
-            self.preds_imgs_ppl = {
-                k: all_preds[idx, ...]
-                for idx, k in enumerate(self.empty_keys + self.nonempty_keys)
-            }
+        self.preds_imgs_clf = map_preds_to_img(
+            bbox_keys=self.nonempty_keys,
+            preds=self.preds,
+            detector_dict=self.detector_dict,
+            empty_class_id=self.empty_class_id,
+        )
+        self.preds_imgs_ppl = map_preds_to_img(
+            bbox_keys=self.empty_keys + self.nonempty_keys,
+            preds=all_preds,
+            detector_dict=self.detector_dict,
+            empty_class_id=self.empty_class_id,
+        )
         self.truth_imgs_clf = [self.label_dict[k] for k in self.preds_imgs_clf.keys()]
         self.truth_imgs_ppl = [self.label_dict[k] for k in self.preds_imgs_ppl.keys()]
 
