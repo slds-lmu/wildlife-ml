@@ -39,6 +39,22 @@ We offer introductory minimal example scripts, which showcase our powerful packa
 [experiments repository](https://github.com/slds-lmu/wildlife-experiments/) in the
 meantime :).*
 
+## Citation
+
+By using this repo, please cite our paper [Automated wildlife image classification: An active learning tool for ecological applications](https://arxiv.org/abs/2303.15823), here is a bibtex entry for it:
+
+```
+@misc{bothmann2023automated,
+      title={Automated wildlife image classification: An active learning tool for ecological applications}, 
+      author={Ludwig Bothmann and Lisa Wimmer and Omid Charrakh and Tobias Weber and Hendrik Edelhoff and Wibke Peters and Hien Nguyen and Caryl Benjamin and Annette Menzel},
+      year={2023},
+      eprint={2303.15823},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      doi={https://doi.org/10.48550/arXiv.2303.15823}
+}
+```
+
 ## Workflow
 
 ### 01: Folder structure
