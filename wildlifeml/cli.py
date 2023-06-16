@@ -9,7 +9,7 @@ from wildlifeml import MegaDetector
 @click.command()
 @click.option('--directory', '-d', help='Directory with images.', required=True)
 @click.option('--output', '-o', help='Output file for results.')
-@click.option('--batch_size', '-b', help='Batch size for processing.', default=2)
+@click.option('--batch_size', '-b', help='Batch size for processing.', default=1)
 @click.option(
     '--confidence_threshold',
     help='Confidence threshold for including bounding box in results.',

@@ -9,10 +9,12 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Union,
 )
 
 import numpy as np
-import tensorflow.compat.v1 as tf
+import torch
+from torchvision.transforms.functional import to_pil_image
 from tqdm import trange
 
 from wildlifeml.utils.io import load_image, save_as_json
@@ -28,17 +30,20 @@ class MegaDetector:
 
     def __init__(
         self,
-        batch_size: int = 2,
+        batch_size: int = 1,
         confidence_threshold: float = 0.1,
-        model_path: str = 'models/megadetector.pb',
+        model_path: str = 'models/md_v5a.0.0.pt',
         url: Optional[str] = None,
+        device: Union[torch.device, str, int] = 'cuda',
     ) -> None:
         """Initialize a MegaDetector object."""
         if not os.path.exists(model_path):
             print('Model at location "{}" does not exist.'.format(model_path))
             MegaDetector.download_model(model_path, url)
 
-        self.graph = MegaDetectorGraph(model_path)
+        self.device = device
+        self.model = torch.hub.load('ultralytics/yolov5:v6.2', 'custom', model_path)
+        self.model = self.model.to(device)
         self.batch_size = batch_size
         self.confidence_threshold = confidence_threshold
 
@@ -52,8 +57,8 @@ class MegaDetector:
         """
         if url is None:
             url = (
-                'https://lilablobssc.blob.core.windows.net/models'
-                '/camera_traps/megadetector/megadetector_v2.pb'
+                'https://github.com/ecologize/CameraTraps/releases'
+                '/download/v5.0/md_v5a.0.0.pt'
             )
 
         print('Starting download from "{}"'.format(url))
@@ -140,39 +145,39 @@ class MegaDetector:
 
         return output_dict
 
+    @torch.no_grad()
     def predict(self, imgs: np.ndarray) -> Dict[int, List[Dict]]:
         """Predict bounding boxes for a numpy array."""
+        if imgs.shape[0] > 1:
+            raise NotImplementedError('Batchsizes > 1 currently not supported!')
+        imgs = to_pil_image(imgs[0])
         # Obtain predictions for full batch
-        b_box, b_score, b_class = self.graph(imgs)
+        results = self.model(imgs)
+        results_tensor = results.xyxyn[0]
 
-        output_dict: Dict[int, List[Dict]] = {}
+        # Loop over every single bounding box in every image
+        detections_cur_image = []
+        for res_row in results_tensor:
+            bbox = res_row[:4]
+            conf = res_row[4]
+            category = res_row[5]
 
-        # Construct result dictionary for all samples in the batch.
-        for i, (boxes, scores, classes) in enumerate(zip(b_box, b_score, b_class)):
+            if conf > self.confidence_threshold:
+                detection_entry = {
+                    'category': int(category),
+                    'conf': truncate_float(float(conf), precision=4),
+                    'bbox': MegaDetector._convert_coords(bbox.cpu().numpy()),
+                }
 
-            # Loop over every single bounding box in every image
-            detections_cur_image = []
-            for b, s, c in zip(boxes, scores, classes):
-
-                if s > self.confidence_threshold:
-                    detection_entry = {
-                        'category': int(c),
-                        'conf': truncate_float(float(s), precision=4),
-                        'bbox': MegaDetector._convert_coords(b),
-                    }
-
-                    detections_cur_image.append(detection_entry)
-
-            output_dict.update({i: detections_cur_image})
-
-        return output_dict
+                detections_cur_image.append(detection_entry)
+        return {0: detections_cur_image}
 
     @staticmethod
     def _convert_coords(coords: np.ndarray) -> Tuple[float, ...]:
         """
         Convert coordinate representation.
 
-        Convert coordinates from the model's output format [y1, x1, y2, x2] to the
+        Convert coordinates from the model's output format [x1, y1, x2, y2] to the
         format [x1, y1, width, height]. All coordinates (including model outputs)
         are normalized in the range [0, 1].
 
@@ -180,56 +185,9 @@ class MegaDetector:
         with shape [y1, x1, y2, x2]
         :return:
         """
-        width = coords[3] - coords[1]
-        height = coords[2] - coords[0]
-        new_coords = [coords[1], coords[0], width, height]
+        width = coords[2] - coords[0]
+        height = coords[3] - coords[1]
+        new_coords = [coords[0], coords[1], width, height]
 
         # Truncate floats for JSON output.
         return tuple([truncate_float(d, 4) for d in new_coords])
-
-
-class MegaDetectorGraph:
-    """Class for the computational graph of the Megadetector."""
-
-    def __init__(self, graph_path: str) -> None:
-        """Initialize a MegaDetectorGraph object."""
-        graph = MegaDetectorGraph._load_model(graph_path)
-        self.tf_session = tf.Session(graph=graph)
-
-        self.image_tensor = graph.get_tensor_by_name('image_tensor:0')
-        self.box_tensor = graph.get_tensor_by_name('detection_boxes:0')
-        self.score_tensor = graph.get_tensor_by_name('detection_scores:0')
-        self.class_tensor = graph.get_tensor_by_name('detection_classes:0')
-
-    @staticmethod
-    def _load_model(graph_path: str) -> tf.Graph:
-        """Load a TF Megadetector graph from a .pb file."""
-        detection_graph = tf.Graph()
-        with detection_graph.as_default():
-            od_graph_def = tf.GraphDef()
-            with tf.gfile.GFile(graph_path, 'rb') as fid:
-                serialized_graph = fid.read()
-                od_graph_def.ParseFromString(serialized_graph)
-                tf.import_graph_def(od_graph_def, name='')
-        return detection_graph
-
-    def run(self, imgs: np.ndarray) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-        """
-        Forward pass through the model.
-
-        :param imgs: Numpy array of shape (B x H x W x C)
-        :return: Tuple of tensors: bbox, scores and classes
-        """
-        return self.tf_session.run(
-            [self.box_tensor, self.score_tensor, self.class_tensor],
-            feed_dict={self.image_tensor: imgs},
-        )
-
-    def __call__(self, imgs: np.ndarray) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-        """
-        Forward pass through the model.
-
-        :param imgs: Numpy array of shape (B x H x W x C)
-        :return: Tuple of tensors: bbox, scores and classes
-        """
-        return self.run(imgs)

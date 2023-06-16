@@ -1,6 +1,6 @@
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.2.0
+    rev: v4.4.0
     hooks:
       -   id: check-added-large-files
           args:
@@ -15,14 +15,14 @@ repos:
       -   id: trailing-whitespace
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.960
+    rev: v1.3.0
     hooks:
     -   id: mypy
         args:
           - --ignore-missing-imports
 
 -   repo: https://github.com/PyCQA/isort
-    rev: 5.10.1
+    rev: 5.12.0
     hooks:
     -   id: isort
         args:
@@ -34,15 +34,15 @@ repos:
           - --up
 
 -   repo: https://github.com/psf/black
-    rev: 22.3.0
+    rev: 23.3.0
     hooks:
     -   id: black
         args:
           - --line-length=88
           - --skip-string-normalization
 
--   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.9.2
+-   repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
     hooks:
     -   id: flake8
         args:
@@ -50,7 +50,7 @@ repos:
           - --extend-ignore=E203
 
 -   repo: https://github.com/PyCQA/pydocstyle
-    rev: 6.1.1
+    rev: 6.3.0
     hooks:
     -   id: pydocstyle
         args:

@@ -4,9 +4,13 @@ albumentations
 click
 matplotlib
 numpy
+pandas
 pillow
 pre-commit
 scikit-learn
 scipy
+seaborn
 tensorflow
+torch
+torchvision
 tqdm
