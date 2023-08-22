@@ -1,17 +1,17 @@
 # Welcome to **Wildlife ML**!
 
-Do you have a wildlife camera trap image database and are finding it challenging 
+Do you have a wildlife camera trap image database and are finding it challenging
 to apply artificial intelligence systems due to the lack of labeled images?
-Look no further than our new GitHub repository, which provides a software package 
-designed specifically to help ecologists to leverage the potential of active learning 
-and deep learning for image classification. 
+Look no further than our new GitHub repository, which provides a software package
+designed specifically to help ecologists to leverage the potential of active learning
+and deep learning for image classification.
 
-Our approach is two-fold, combining improved strategies for object detection and 
+Our approach is two-fold, combining improved strategies for object detection and
 image classification with an active learning system that allows for
-more efficient training of deep learning models. 
-Plus, our software package is designed to be user-friendly, 
-making it accessible to researchers without specific programming skills. 
-With our proposed two-stage framework, we show that implementing active learning can 
+more efficient training of deep learning models.
+Plus, our software package is designed to be user-friendly,
+making it accessible to researchers without specific programming skills.
+With our proposed two-stage framework, we show that implementing active learning can
 lead to improved predictive performance and more efficient use of pre-labeled data.
 Join us in making ecological practice more accessible and effective!
 
@@ -27,7 +27,7 @@ This greatly reduces the difficulty of the problem and as a result boosts predic
 performance of the classificator network.
 
 Apart from our classification pipeline, we offer a simple interface for active
-learning. 
+learning.
 
 ## Examples
 
@@ -35,7 +35,7 @@ We offer introductory minimal example scripts, which showcase our powerful packa
 
 **EXAMPLE SCRIPTS COMING SOON**
 
-*Please see our 
+*Please see our
 [experiments repository](https://github.com/slds-lmu/wildlife-experiments/) in the
 meantime :).*
 
@@ -45,7 +45,7 @@ By using this repo, please cite our paper [Automated wildlife image classificati
 
 ```
 @misc{bothmann2023automated,
-      title={Automated wildlife image classification: An active learning tool for ecological applications}, 
+      title={Automated wildlife image classification: An active learning tool for ecological applications},
       author={Ludwig Bothmann and Lisa Wimmer and Omid Charrakh and Tobias Weber and Hendrik Edelhoff and Wibke Peters and Hien Nguyen and Caryl Benjamin and Annette Menzel},
       year={2023},
       eprint={2303.15823},
@@ -96,13 +96,13 @@ It is accessible as a python object:
 ```python
 from wildlifeml import MegaDetector
 
-md = MegaDetector()
+md = MegaDetector(batch_size=32, confidence_threshold=0.1)
 md.predict_directory(directory='<directory>', output_file='<output_file>')
 ```
 
 `<directory>` should be a directory that contains images, where bounding boxes
 should be predicted. More options and arguments are available. The results are saved
-in `.json` file.
+in a `.json` file.
 
 We also offer a CLI option:
 
@@ -175,7 +175,7 @@ key_map = mapper.get_keymap()
 
 Our dataset builds on the Keras `Sequence` utility and thus supports multi-threaded
 loading during training. For defining the content of the dataset, a list of keys
-pointing to the respective images shall be provided. 
+pointing to the respective images shall be provided.
 
 Initializing our `WildlifeDataset` requires providing a list of strings `keys`.
 This corresponds to a list that contains the identifiers provided by the MD file, e.g:
@@ -264,11 +264,11 @@ trainer.fit(train_dataset, val_dataset)
 ### 05: Evaluating a model
 
 Due to our cascaded MD approach. The evaluation of the model requires a bit more
-care than a usual Keras model. 
+care than a usual Keras model.
 Additionally, we make the assumption that an image does only carry one label.
 As the MD can provide multiple bounding boxes, the final decision is made by a
 confidence-weighted vote.
-This is contained in the  `Evaluator`, which computes metrics by incorporating the 
+This is contained in the  `Evaluator`, which computes metrics by incorporating the
 decision of the MD and respecting the multiple-boxes-per-image dilemma.
 
 Required parameters for the evaluator are:
@@ -277,6 +277,12 @@ Required parameters for the evaluator are:
 - `detector_file_path`: Path to the MD file
 - `dataset`: `WildlifeDataset` to evaluate
 - `num_classes`: Number of classes in the dataset.
+
+If the `Evaluator` is supposed to discard boxes that do not meet the MD confidence
+threshold as empty, it is advisable to also set the `conf_threshold` parameter.
+Per default, the `Evaluator` assumes the empty class to be encoded with the largest
+number with class labels starting from 0 (e.g., class 9 for a total of 10 classes).
+Specify otherwise if this is not the case in your dataset.
 
 An example is:
 
@@ -287,7 +293,9 @@ evaluator = Evaluator(
     detector_file_path='<path_to_images_megadetector.json>',
     label_file_path='<path_to_labels.csv>',
     dataset=training_dataset,
-    num_classes=10
+    num_classes=10,
+    conf_threshold=0.1,
+    empty_class_id=99
 )
 ```
 
@@ -298,6 +306,9 @@ recall and f1 score is computed as:
 evaluator.evaluate(trainer)
 metrics = evaluator.compute_metrics()
 ```
+
+If you wish to extract the predictions and ground-truth labels for all individual
+observations, use `evaluator.get_details()`.
 
 ### 06: Active Learning
 
@@ -310,7 +321,7 @@ For an elaborated introduction to the areas of active learning, we recommend to
 read our paper.
 
 Active learning in `wildlife-ml` is realized over the `ActiveLearner` object.
-Minimally the `ActiveLearner` needs: 
+Minimally the `ActiveLearner` needs:
 
 - `trainer`: `WildlifeTrainer` as model container and handler.
 - `pool_dataset`: `WildlifeDataset` without labels
@@ -319,7 +330,7 @@ Minimally the `ActiveLearner` needs:
 - `conf_threshold`: Minimal confidence for bounding boxes in the MD file
 - `empty_class_id`: idx of the class that symbolizes an empty image
 
-In case a test set exists, it is recommended to fill the `test_dataset` argument 
+In case a test set exists, it is recommended to fill the `test_dataset` argument
 as well.
 An example is:
 
@@ -330,7 +341,7 @@ a_learner = ActiveLearner(
     trainer=trainer,
     pool_dataset=train_dataset,
     label_file_path='<path_to_labels.csv>',
-    conf_threshold=0.5,
+    conf_threshold=0.1,
     empty_class_id=10,
     test_dataset=test_dataset
 )
@@ -346,7 +357,7 @@ After `.run()` has finished, the directory `active-wildlife` will contain a dire
 `images` and a file `active_labels.csv`.
 The task of the user is now to derive a label for the images in the `images` directory
 and enter the corresponding label into the `csv` file.
-After the user has finished labelling the images, the `csv` file should be saved 
+After the user has finished labelling the images, the `csv` file should be saved
 and the above `run` function should be invoked again.
 The manually derived labels are appended to the training process and incorporated into
 the full procedure.
