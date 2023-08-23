@@ -150,12 +150,17 @@ class Evaluator:
             keys = list(details['preds_imgs_ppl'].keys())
             preds = list(details['preds_imgs_ppl'].values())
         else:
-            preds = np.concatenate([self.empty_pred_arr, self.preds])
+            preds = list(np.concatenate([self.empty_pred_arr, self.preds]))
         labels = [np.argmax(x) for x in preds]
         df = pd.DataFrame(
-            list(zip(keys, preds, labels)),
-            columns=['img_key', 'prediction', 'hard_label'],
+            list(zip(keys, labels, preds)),
+            columns=['img_key', 'hard_label', 'prediction'],
         )
+        df[[f'prob_class_{i}' for i in range(self.num_classes)]] = pd.DataFrame(
+            df.prediction.to_list(), index=df.index
+        )
+        df = df.drop(columns=['prediction'])
+        breakpoint()
         df.to_csv(filepath, float_format='%.6f')
 
     def compute_metrics(self) -> Dict:
