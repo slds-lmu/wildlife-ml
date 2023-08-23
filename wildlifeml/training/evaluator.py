@@ -158,9 +158,9 @@ class Evaluator:
         )
         df[[f'prob_class_{i}' for i in range(self.num_classes)]] = pd.DataFrame(
             df.prediction.to_list(), index=df.index
-        )
+        ).astype(float)
         df = df.drop(columns=['prediction'])
-        df.astype(float).to_csv(filepath, float_format='%.6f')
+        df.to_csv(filepath, float_format='%.6f')
 
     def compute_metrics(self) -> Dict:
         """Compute eval metrics for predictions."""
