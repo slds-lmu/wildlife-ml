@@ -400,7 +400,7 @@ class ActiveLearner:
             print('No test dataset was specified. Evaluation is skipped.')
             return
         if self.test_logfile_path is not None:
-            self.evaluator.evaluate(self.trainer)
+            self.evaluator.evaluate(self.trainer.get_model())
             details = self.evaluator.get_details()
             filename = os.path.join(
                 self.test_logfile_path, f'results_iteration_{self.active_counter}.pkl'
