@@ -151,13 +151,12 @@ class Evaluator:
             preds = list(details['preds_imgs_ppl'].values())
         else:
             preds = np.concatenate([self.empty_pred_arr, self.preds])
-        preds = np.round(preds, 6)
         labels = [np.argmax(x) for x in preds]
         df = pd.DataFrame(
             list(zip(keys, preds, labels)),
             columns=['img_key', 'prediction', 'hard_label'],
         )
-        df.to_csv(filepath)
+        df.to_csv(filepath, float_format='%.6f')
 
     def compute_metrics(self) -> Dict:
         """Compute eval metrics for predictions."""
