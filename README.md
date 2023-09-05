@@ -44,14 +44,16 @@ meantime :).*
 By using this repo, please cite our paper [Automated wildlife image classification: An active learning tool for ecological applications](https://arxiv.org/abs/2303.15823), here is a bibtex entry for it:
 
 ```
-@misc{bothmann2023automated,
-      title={Automated wildlife image classification: An active learning tool for ecological applications},
-      author={Ludwig Bothmann and Lisa Wimmer and Omid Charrakh and Tobias Weber and Hendrik Edelhoff and Wibke Peters and Hien Nguyen and Caryl Benjamin and Annette Menzel},
-      year={2023},
-      eprint={2303.15823},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      doi={https://doi.org/10.48550/arXiv.2303.15823}
+@article{bothmann_et_al_2023,
+	title = {Automated wildlife image classification: {An} active learning tool for ecological applications},
+	volume = {77},
+	issn = {1574-9541},
+	url = {https://www.sciencedirect.com/science/article/pii/S1574954123002601},
+	doi = {10.1016/j.ecoinf.2023.102231},
+	journal = {Ecological Informatics},
+	author = {Bothmann, Ludwig and Wimmer, Lisa and Charrakh, Omid and Weber, Tobias and Edelhoff, Hendrik and Peters, Wibke and Nguyen, Hien and Benjamin, Caryl and Menzel, Annette},
+	year = {2023},
+	pages = {102231}
 }
 ```
 
